@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "XML4Plex",
+  "version": "0.0.01",
+  "description": "Show XML for a shared server",
+  "content_scripts": [
+    {
+      "matches": ["https://app.plex.tv/*"],
+      "js": ["contentScript.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "/assets/xml.png"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "permissions" : [
+    "tabs",
+    "downloads",
+    "activeTab",
+    "storage",
+    "cookies"
+  ],
+  "icons": {
+    "64": "assets/xml.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}
