@@ -1,8 +1,8 @@
 "use strict";
 
 // Global vars
-var servers = {};
-var header = null;
+var servers = [];
+var product;
 var urlName = {};
 
 
@@ -17,11 +17,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 //Download filename listner
 chrome.downloads.onDeterminingFilename.addListener(function(item, __suggest) {
-    if (item["byExtensionName"] === header["X-Plex-Product"]){
+    console.log("Ged 77 item", item)
+    if (item["byExtensionName"] === product){
         __suggest({filename: urlName[item["url"]]});
-    } else {
+    } 
+    
+    /*
+    else {
          __suggest(null);
     }
+         */
     return true;
 });
 
@@ -50,11 +55,12 @@ async function handleListener(request){
         case 'getPlexCookie':
             result = await getPlexCookie(prefs);
             break;
-        case 'getPlexSharedServers':
-            await getPlexSharedServers(prefs);
-            break;
         case 'download':
             download(prefs);
+            break;
+        case 'setGlobalVars':
+            servers = prefs["servers"];
+            product = prefs["product"];
             break;
         default:
             break;
@@ -64,33 +70,24 @@ async function handleListener(request){
 
 //#region  Internal functions
 
-// Returns the authentication_token from the cookies
-
 // Get Media prefs
 async function getMedia(prefs){
-    let idxSrvEnd = prefs["changeInfo"]["url"].indexOf("/details");
-    let machine_identifier = prefs["changeInfo"]["url"].substring(38, idxSrvEnd);
-    if (servers.hasOwnProperty(machine_identifier)){
-        if (!servers[machine_identifier].hasOwnProperty("address")){
-            await (testcon(header, machine_identifier, servers[machine_identifier]));
+    if (prefs["changeInfo"]["url"].indexOf("key=%2Flibrary%2Fmetadata%2F") > 0){    //Only react when watching a media
+        if (servers.includes(getIDFromURL(prefs["changeInfo"]["url"]))){    //Only react if this is a shared server
+            const message = {"event": "gotMedia", "url": prefs["changeInfo"]["url"]};
+            chrome.tabs.sendMessage(prefs["tabId"], message);
         }
-        let idxKeyStart = prefs["changeInfo"]["url"].indexOf("metadata%2F")+11;
-        let idxKeyEnd = prefs["changeInfo"]["url"].indexOf("&context=");
-        let key = prefs["changeInfo"]["url"].substring(idxKeyStart, idxKeyEnd);
-        let mediaPrefs = {};
-        mediaPrefs["key"] = key;
-        mediaPrefs["server"] = servers[machine_identifier];
-        mediaPrefs["servers"] = Object.keys(servers);
-        const message = {"event": "gotMedia", "mediaPrefs": mediaPrefs};
-        chrome.tabs.sendMessage(prefs["tabId"], message);
     }
 }
 
 // Download a media
 function download(prefs) {
+    const supportedSubs = ["srt", "smi", "ssa", "ass", "vtt"];
+    let ext = prefs["filename"].split('.').pop();
     chrome.downloads.download(prefs, function(downloadId) {
-        if (prefs["filename"].endsWith("srt")){
-            urlName[prefs["url"]] = `${prefs["filename"]}.srt`;
+        //if (prefs["filename"].endsWith("srt")){
+        if (supportedSubs.includes(ext.toLowerCase())){
+            urlName[prefs["url"]] = `${prefs["filename"]}.${ext}`;
         } else {
             urlName[prefs["url"]] = prefs["filename"];
         }
@@ -110,6 +107,7 @@ function download(prefs) {
     });
 }
 
+// Returns the authentication_token from the cookies
 async function getPlexCookie(prefs){
     return new Promise((resolve, reject) => {
         let result = null;
@@ -124,83 +122,14 @@ async function getPlexCookie(prefs){
     });
 }
 
-// Get shared servers
-async function getPlexSharedServers(prefs){
-    let url = "https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1";
-    // Get the shared servers
-    let result = {};
-    let resources = null;
-    try {
-        await fetch(url, {headers: prefs["header"]}).then( async response => {
-            if (response.ok){
-                resources = await response.json();
-                // Now only add needed info
-                for (var i = 0; i < resources.length; i++){
-                    if (!resources[i]["owned"] && resources[i]["product"] === "Plex Media Server"){
-                        // Fill out the gaps
-                        let value = {};
-                        value["name"] = resources[i]["name"];
-                        value["accessToken"] = resources[i]["accessToken"];
-                        value["connections"] = resources[i]["connections"];
-                        servers[resources[i]["clientIdentifier"]] = value;
-                    }
-                }
-            } else {
-                console.error(`Status ${response.status} happened for url: ${url}`)
-                console.error(`Status TXT ${response.statusText} happened for url: ${url}`)
-                return null;
-            }
-        });
-    } catch (error) {
-        console.error(`Getting url: ${url} failed with error ${JSON.stringify(error)}`);
-        result = null;
-    }
-    getConAndInfo(prefs);
+// Returns index of n'th orcurrence of a substring in a string
+function getPosition(string, subString, index) {
+  return string.split(subString, index).join(subString).length;
 }
 
-// Get connection address and more info
-function getConAndInfo(prefs){
-    header = prefs["header"];
-    for (var key in servers){   // Get info for each shared server
-        testcon(header, key, servers[key]);
-    }
-}
-
-// Fetch with a default timeout with a default of 8000 millisec
-async function fetchWithTimeout(uri, options = {}) {
-    const { timeout = 8000 } = options;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-
-    const response = await fetch(uri, {
-        ...options,
-        signal: controller.signal
-    });
-    clearTimeout(timer);
-    return response;
-}
-
-// Returns JSON if we found a PMS, else null
-async function testcon(header, key, entry){
-    let myHeader = JSON.parse(JSON.stringify(header));
-    myHeader["X-Plex-Token"] = entry["accessToken"];
-    for (var i=0; i < entry["connections"].length; i++){
-        if (!entry["connections"][i]["local"] && !entry["connections"][i]["relay"]){
-            try {
-                let url = `${entry["connections"][i]["uri"]}/media/providers`;
-                const response = await fetchWithTimeout(url, { headers: myHeader, timeout: 6000});
-                const data = await response.json();
-                servers[key]["machine_identifier"] = data["MediaContainer"]["machineIdentifier"];
-                servers[key]["plexPass"] = data["MediaContainer"]["myPlexSubscription"];
-                servers[key]["allowSync"] = data["MediaContainer"]["allowSync"];
-                servers[key]["address"] = url;
-                break;
-            } catch (error) {
-                // Catches timeout errors if the request takes longer than 6 seconds
-                console.log(error.name === 'AbortError');
-            }
-        }
-    }
+// Returns a server machine ID from an url
+function getIDFromURL(url){
+    return url.substring(getPosition(url, "/", 6)+1,getPosition(url, "/", 7))
 }
 
 //#endregion

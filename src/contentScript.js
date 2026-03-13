@@ -1,18 +1,22 @@
 "use strict";
 
 const validTypes = ["movie", "episode"];
-
+var blocklist = []; // Avoid multiple calls
 var user = {};      // Plex user
 var header = {};
 var mediaType;
+var SharedServers = {}; // Shared servers
+var modalObserver;
 
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    /*
     // Remove footer if already present
     const elFooter = document.getElementById(`${header["X-Plex-Product"]}ModalFooter`);
     if (elFooter){
         elFooter.remove(); // Removes the footer from the modal again
     }
+        */
     if (request["event"] == "gotMedia"){
         gotMedia(request);
     }
@@ -31,47 +35,55 @@ async function main(){
 
 //#region Internal functions
 
-async function injectFooter(ratingKey, mediaPrefs){
-    if ( validTypes.includes(JSON.parse(JSON.stringify(mediaType)))){
-        let modalContent = document.getElementsByClassName("modal-content");
-        if (modalContent.length > 0){
-            // Create modal footer, but if there already remove it first
-            let footer = document.getElementById(`${header["X-Plex-Product"]}ModalFooter`);
-            if (footer){
-                footer.remove();
-            }
-            let divModalFooter = document.createElement("div");
-            divModalFooter.id = `${header["X-Plex-Product"]}ModalFooter`;
-            divModalFooter.className = "modal-footer";
-            let divBottom = document.createElement("div");
-            divBottom.className = "pull-left";
-            // XML button
-            // Need to get info for media
-            let url = `${mediaPrefs["server"]["address"].slice(0,-16)}/library/metadata/${ratingKey}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${mediaPrefs["server"]["accessToken"]}`;
-            let aXML = document.createElement("a");
-            aXML.id = "aXML";
-            aXML.target = "_blank";
-            aXML.innerText = "View XML";
-            aXML.href = url;
-            aXML.style.marginRight = "5px";
-            divBottom.appendChild(aXML);
-            divModalFooter.appendChild(aXML);
-            // Add download button if we are allowed to download
-            if (mediaPrefs["server"]["allowSync"]){
-                let dwnBotton = document.createElement("button");
-                dwnBotton.id = "dwnButton";
-                dwnBotton.innerText = "Download";
-                dwnBotton.onclick = function() {  download(mediaPrefs); };
-                divBottom.appendChild(dwnBotton);
-            }
-            divModalFooter.appendChild(divBottom);
-            modalContent[0].appendChild(divModalFooter);
-            // And let's remove our modal if present
-            let el = document.getElementById(`${header["X-Plex-Product"]}-fileSelectModal`);
-            if (el){
-                el.remove();
-            }
+async function injectFooter(ratingKey, srvID){
+    console.log("Ged 12-2 footer insert ratingKey", ratingKey)
+    let elXML = document.getElementById("aXML");
+    console.log("Ged 17-3 elXML", elXML)
+    const url = `${SharedServers[srvID]["address"]}/library/metadata/${ratingKey}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[srvID]["accessToken"]}`;
+
+    if (elXML && url === elXML.href){
+        console.log("Ged 17-5 just return")
+        //return
+    }
+
+    let modalContent = document.getElementsByClassName("modal-content");
+    console.log("Ged 17-6 modalContent", modalContent)
+    if (modalContent.length > 0){
+        console.log("Ged 17-7 inserting")
+        // Create modal footer, but if there already remove it first
+        let footer = document.getElementById(`${header["X-Plex-Product"]}ModalFooter`);
+        if (footer){
+            console.log("Ged 17-7-3 removing existing footer")
+            footer.remove();
         }
+        let divModalFooter = document.createElement("div");
+        divModalFooter.id = `${header["X-Plex-Product"]}ModalFooter`;
+        divModalFooter.className = "modal-footer";
+        let divBottom = document.createElement("div");
+        divBottom.className = "pull-left";
+        // XML button
+        // Need to get info for media
+
+        console.log("Ged 12-5 footer insert XML url", url)
+        let aXML = document.createElement("a");
+        aXML.id = "aXML";
+        aXML.target = "_blank";
+        aXML.innerText = "View XML";
+        aXML.href = url;
+        aXML.style.marginRight = "5px";
+        divBottom.appendChild(aXML);
+        divModalFooter.appendChild(aXML);
+        // Add download button if we are allowed to download
+        if (SharedServers[srvID]["allowSync"]){
+            let dwnBotton = document.createElement("button");
+            dwnBotton.id = "dwnButton";
+            dwnBotton.innerText = "Download";
+            dwnBotton.onclick = function() {  download(SharedServers[srvID]["address"], ratingKey); };
+            divBottom.appendChild(dwnBotton);
+        }
+        divModalFooter.appendChild(divBottom);
+        console.log("Ged 12-12 divModalFooter", divModalFooter)
+        modalContent[0].appendChild(divModalFooter);
     }
 }
 
@@ -91,74 +103,218 @@ function getPosition(string, subString, index) {
   return string.split(subString, index).join(subString).length;
 }
 
-function watchForModal(mediaPrefs){
-    const targetNode = document.body;
-    // Options for the observer (which mutations to observe)
-    const config = { attributes: true, childList: true, subtree: true };
-    // Callback function to execute when mutations are observed
-    const callback = (mutationList) => {
-        for (const mutation of mutationList) {
-            if (mutation.type === "attributes" && mutation.attributeName === "data-popper-placement"){
-                if (document.URL.startsWith("https://app.plex.tv/desktop/#!/server")){
-                    let srvID = getIDFromURL(document.URL);
-                    if (mediaPrefs["servers"].includes(srvID)){    //Only for shared servers
-                        let modalContent = document.getElementsByClassName("modal-content");
-                        if (modalContent.length > 0){ // We have the modal opened
-                            injectFooter(mediaPrefs["key"], mediaPrefs);
+async function injectFooter2(url){
+
+    let elXML = document.getElementById("aXML");
+
+    const urlXML = `${SharedServers[getIDFromURL(url)]["address"]}/library/metadata/${getKeyFromUrl(url)}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[getIDFromURL(url)]["accessToken"]}`;
+
+    if (elXML && urlXML === elXML.href){
+        console.log("Ged 17-5 just return")
+        return
+    }
+
+    let modalContent = document.getElementsByClassName("modal-content");
+    if (modalContent.length > 0){
+        console.log("Ged 17-7 inserting here", modalContent[0])
+        /*
+        // Create modal footer, but if there already remove it first
+        let footer = document.getElementById(`${header["X-Plex-Product"]}ModalFooter`);
+
+        if (footer){
+            console.log("Ged 17-7-3 removing existing footer")
+            footer.remove();
+        }
+            */
+        let divModalFooter = document.createElement("div");
+        divModalFooter.id = `${header["X-Plex-Product"]}ModalFooter`;
+        divModalFooter.className = "modal-footer";
+        let divBottom = document.createElement("div");
+        divBottom.className = "pull-left";
+        // XML button
+        // Need to get info for media
+
+        console.log("Ged 12-5 footer insert XML url", urlXML)
+        let aXML = document.createElement("a");
+        aXML.id = "aXML";
+        aXML.target = "_blank";
+        aXML.innerText = "View XML";
+        aXML.href = urlXML;
+        aXML.style.marginRight = "5px";
+        divBottom.appendChild(aXML);
+        divModalFooter.appendChild(aXML);
+        /*
+        // Add download button if we are allowed to download
+        if (SharedServers[srvID]["allowSync"]){
+            let dwnBotton = document.createElement("button");
+            dwnBotton.id = "dwnButton";
+            dwnBotton.innerText = "Download";
+            dwnBotton.onclick = function() {  download(SharedServers[srvID]["address"], ratingKey); };
+            divBottom.appendChild(dwnBotton);
+        }
+        divModalFooter.appendChild(divBottom);
+        */
+
+        modalContent[0].appendChild(divModalFooter);
+        
+    }
+    console.log("Ged 12-15 modalContent", modalContent[0])
+    
+}
+
+// Callback triggers when mutations are observed
+const injectCallback = (mutationList) => {
+    for (const mutation of mutationList) {
+        if (mutation.type === "attributes" && mutation.attributeName === "data-popper-placement"){
+            if (document.URL.startsWith("https://app.plex.tv/desktop/#!/server")){
+                let srvID = getIDFromURL(document.URL);
+                if (SharedServers.hasOwnProperty(srvID)){    //Only for shared servers
+                    let modalContent = document.getElementsByClassName("modal-content");
+                    if (modalContent.length > 0){ // We have the modal opened
+                        let elHeader = document.querySelector(".modal-title, h4")
+    elHeader.innerText = " Gummiged"
+
+                        //injectFooter(getKeyFromUrl(document.URL), getIDFromURL(document.URL));
+                        const entryBlock = `${getIDFromURL(document.URL)}-${getKeyFromUrl(document.URL)}`;
+                        if (!blocklist.includes(entryBlock)){
+                            blocklist.push(entryBlock);
+                            injectFooter2(document.URL);
+                        } else {
+                            console.log("Ged 7 blocked")
                         }
                     }
                 }
             }
         }
-    };
-    // Create an observer instance linked to the callback function
-    const modalObserver = new MutationObserver(callback);
+    }
+};
+
+function watchForModal(target){
+    // Options for the observer (which mutations to observe)
+    const config = { attributes: true, childList: true, subtree: true };
+    if (!modalObserver){    // Start the MutationObserver
+        modalObserver = new MutationObserver(injectCallback);
+    }
     // Start observing the target node for configured mutations
-    modalObserver.observe(targetNode, config);
+    modalObserver.observe(target, config);
 }
 
-//gotMedia
+//gotMedia event triggered
 async function gotMedia(request){
-    // Lookup the media to check if this is a movie or an episode
-    let address = request["mediaPrefs"]["server"]["address"].slice(0,-16);
-    // Get key from url
-    let key = getKeyFromUrl();
-    let url = `${address}/library/metadata/${key}`;
-    request["mediaPrefs"]["key"] = key;
-    let myHeader = JSON.parse(JSON.stringify(header));
-    myHeader["X-Plex-Token"] = request["mediaPrefs"]["server"]["accessToken"];
-    let jsonResponse;
-    try {
-        await fetch(url, {headers: myHeader}).then( async response => {
-            if (response.ok){
-                jsonResponse = await response.json();
+    if (request["url"] === document.URL){   //Make sure we still is on the right page
+        const id = getIDFromURL(document.URL);    //Get the servers MachineID
+        if (!SharedServers[id].hasOwnProperty("address")){
+            alert("No address found yet, please try again in 5 seconds")
+        } else {
+            const address = SharedServers[id]["address"];   //Get server address
+            let url = `${address}/library/metadata/${getKeyFromUrl()}`; // Get key from url
+            let myHeader = JSON.parse(JSON.stringify(header));
+            myHeader["X-Plex-Token"] =SharedServers[id]["accessToken"];
+            let jsonResponse;
+            try {
+                await fetch(url, {headers: myHeader}).then( async response => {
+                    if (response.ok){
+                        jsonResponse = await response.json();
+                    }
+                });
+            } catch(error) {
+                alert(`JSON download failed for url: ${url} with the error: ${error}`);
             }
-        });
-    } catch(error) {
-        alert(`JSON download failed for url: ${url} with the error: ${error}`);
-    }
-    mediaType = JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"]));
-    if (validTypes.includes(mediaType)){
-        watchForModal(request["mediaPrefs"]);
-    } else {
-        request = null;
+            if (validTypes.includes(JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"])))){
+                watchForModal(document.body);
+            } else {
+                request = null;
+            }
+        }
     }
 }
 
 // Start fetching shared servers in the backend
-function getSharedServers(){
+async function getSharedServers(){
     let myHeader = JSON.parse(JSON.stringify(header));
     myHeader["X-Plex-Token"] = user["authentication_token"];
     const prefs = {"header": myHeader};
-    chrome.runtime.sendMessage({ event: 'getPlexSharedServers', prefs: prefs });
+    //chrome.runtime.sendMessage({ event: 'getPlexSharedServers', prefs: prefs });
+    let url = "https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1";
+    // Get the shared servers
+    let result = {};
+    let resources = null;
+    try {
+        await fetch(url, {headers: prefs["header"]}).then( async response => {
+            if (response.ok){
+                resources = await response.json();
+                // Now only add needed info
+                for (var i = 0; i < resources.length; i++){
+                    if (!resources[i]["owned"] && resources[i]["product"] === "Plex Media Server"){
+                        // Fill out the gaps
+                        let value = {};
+                        value["name"] = resources[i]["name"];
+                        value["accessToken"] = resources[i]["accessToken"];
+                        value["connections"] = resources[i]["connections"];
+                        value["machine_identifier"] = resources[i]["clientIdentifier"];
+                        SharedServers[resources[i]["clientIdentifier"]] = value;
+                        getAddressAndInfo(SharedServers[resources[i]["clientIdentifier"]], JSON.parse(JSON.stringify(header)));
+                    }
+                }
+            } else {
+                console.error(`Status ${response.status} happened for url: ${url}`)
+                console.error(`Status TXT ${response.statusText} happened for url: ${url}`)
+                return null;
+            }
+        });
+    } catch (error) {
+        console.error(`Getting url: ${url} failed with error ${JSON.stringify(error)}`);
+        result = null;
+    }
+    setGlobalVars();
+}
+
+// Get connection address and more info and update the var SharedServers
+async function getAddressAndInfo(srvInfo, myHeader){
+    myHeader["X-Plex-Token"] = srvInfo["accessToken"];
+    for (var i=0; i < srvInfo["connections"].length; i++){
+        if (!srvInfo["connections"][i]["local"] && !srvInfo["connections"][i]["relay"]){
+            try {
+                let url = `${srvInfo["connections"][i]["uri"]}/media/providers`;
+                const response = await fetchWithTimeout(url, {headers: myHeader, timeout: 6000});
+                const data = await response.json();
+                srvInfo["plexPass"] = data["MediaContainer"]["myPlexSubscription"];
+                srvInfo["allowSync"] = data["MediaContainer"]["allowSync"];
+                srvInfo["address"] = srvInfo["connections"][i]["uri"];
+                SharedServers[srvInfo["machine_identifier"]] = srvInfo;
+                delete SharedServers[srvInfo["machine_identifier"]]["connections"];
+                break;
+
+            } catch (error) {
+                // Catches timeout errors if the request takes longer than 6 seconds
+                console.log(error.name === 'AbortError');
+            }
+        }
+    }
+}
+
+// Fetch with a default timeout with a default of 8000 millisec
+async function fetchWithTimeout(uri, options = {}) {
+    const { timeout = 8000 } = options;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+
+    const response = await fetch(uri, {
+        ...options,
+        signal: controller.signal
+    });
+    clearTimeout(timer);
+    return response;
 }
 
 // Get a list of files/streams to present to the user
-async function getMediaList(mediaPrefs){
-    let url = `${mediaPrefs["server"]["address"].slice(0,-16)}/library/metadata/${mediaPrefs["key"]}`;
+async function getMediaList(srvAddress, key){
+    const url = `${srvAddress}/library/metadata/${key}`;
+    const srvID = getIDFromURL(document.URL);
+
     // Start by getting the media info
     let infoHeader = JSON.parse(JSON.stringify(header));
-    infoHeader["X-Plex-Token"] = mediaPrefs["server"]["accessToken"];
+    infoHeader["X-Plex-Token"] = SharedServers[srvID]["accessToken"];
     let jsonResponse;
     try {
         await fetch(url, {headers: infoHeader}).then( async response => {
@@ -171,6 +327,7 @@ async function getMediaList(mediaPrefs){
     }
     let files = {};
     let metadata = jsonResponse["MediaContainer"]["Metadata"];
+    const libPath = await getSectionPath(srvAddress, metadata[0]["librarySectionID"], srvID);
     for (let i = 0; i < metadata.length; i++){    // Walk Metadata array
         files[i] = {};
         files[i]["title"] = metadata[i]["title"];
@@ -180,11 +337,16 @@ async function getMediaList(mediaPrefs){
         let medias = metadata[i]["Media"];
         for (let x = 0; x < medias.length; x++){    // Walk Media array
             let parts = metadata[i]["Media"][x]["Part"];
-            //medias["Part"] = {};
             for (let y = 0; y < parts.length; y++){    // Walk Part array
                 let filename = medias[x]["Part"][y]["file"].replace(/^.*[\\/]/, '');
                 file = {};
-                file["filename"] = filename
+                for (let z=0; z < libPath.length; z++){
+                    if ((medias[x]["Part"][y]["file"].startsWith(libPath[z])) && ((medias[x]["Part"][y]["file"][libPath[z].length] == '/') || (medias[x]["Part"][y]["file"][libPath[z].length] == '\\'))) {
+                        files[i]["fileDir"] = medias[x]["Part"][y]["file"].slice((libPath[z].length+1)).slice(0, -filename.length-1);
+                        break;
+                    }
+                }
+                file["filename"] = `${files[i]["fileDir"]}/${filename}`;
                 file["key"] = medias[x]["Part"][y]["key"];
                 file["type"] = metadata[i]["type"];
                 files[i]["files"].push(file);
@@ -192,7 +354,7 @@ async function getMediaList(mediaPrefs){
                     let stream = medias[x]["Part"][y]["Stream"][z];
                     if (stream.hasOwnProperty("key") && stream["streamType"] == 3 ){
                         file = {};
-                        file["filename"] = `${filename.replace(/\.[^/.]+$/, "")}.${stream["languageTag"]}.${stream["format"]}`;
+                        file["filename"] = `${files[i]["fileDir"]}/${filename.replace(/\.[^/.]+$/, "")}.${stream["languageTag"]}.${stream["format"]}`;
                         file["key"] = stream["key"];
                         file["type"] = stream["extendedDisplayTitle"];
                         files[i]["files"].push(file);
@@ -204,14 +366,44 @@ async function getMediaList(mediaPrefs){
     return files;
 }
 
+// Returns an array of Library paths defined
+async function getSectionPath(srvAddress, libID, srvID){
+    let result = [];
+    // Start by getting the media info
+    let infoHeader = JSON.parse(JSON.stringify(header));
+    let url = `${srvAddress}/library/sections`;
+    infoHeader["X-Plex-Token"] = SharedServers[srvID]["accessToken"];
+    let jsonResponse;
+    try {
+        await fetch(url, {headers: infoHeader}).then( async response => {
+            if (response.ok){
+                jsonResponse = await response.json();
+            }
+        });
+    } catch(error) {
+        alert(`Download failed: ${error}`);
+    }
+    const directories = jsonResponse["MediaContainer"]["Directory"];
+    for (let i = 0; i < directories.length; i++){
+        if (directories[i]["key"] == libID.toString()){    // Found the correct library
+            for (let x = 0; x < directories[i]["Location"].length; x++){    // add paths to result
+                result.push(directories[i]["Location"][x]["path"]);
+            }
+            break;
+        }
+    }
+    return result;
+}
+
 // Hide modal
 function fileSelectModalClose(){
     let modal = document.getElementById(`${header["X-Plex-Product"]}-fileSelectModal`);
     modal.style.display = "none";
+    modal.remove();
 }
 
 // Create a modal file selector for downloads
-async function createFileSelect(files, mediaPrefs){
+async function createFileSelect(files, srvAddress){
     // Remove if it already exists
     let el = document.getElementById(`${header["X-Plex-Product"]}-fileSelectModal`);
     if (el){
@@ -296,15 +488,15 @@ async function createFileSelect(files, mediaPrefs){
     let fileSelectModalFooterContentsBtnDwn = document.createElement("button");
     fileSelectModalFooterContentsBtnDwn.type = "button";
     fileSelectModalFooterContentsBtnDwn.innerText = "Download";
-    fileSelectModalFooterContentsBtnDwn.onclick = function() { downloadItems(files, mediaPrefs); };
+    fileSelectModalFooterContentsBtnDwn.onclick = function() { downloadItems(files, srvAddress); };
     fileSelectModalFooterContents.appendChild(fileSelectModalFooterContentsBtnDwn);
     fileSelectModalFooter.appendChild(fileSelectModalFooterContents);
     fileSelectModalContent.appendChild(fileSelectModalFooter);
 }
 
 // Initiate the download
-async function downloadItems(files, mediaPrefs){
-    fileSelectModalClose();
+async function downloadItems(files, srvAddress){
+    const srvID = getIDFromURL(document.URL);
     let itemsDwn = [];
     for (let i = 0; i < files[0]["files"].length; i++){
         let el = document.getElementById(`item${i.toString()}`);
@@ -313,6 +505,7 @@ async function downloadItems(files, mediaPrefs){
             itemsDwn.push(item[0]);
         }
     }
+    fileSelectModalClose();
     if (itemsDwn.length > 0){
         // Make the prefs
         let prefs = {};
@@ -332,10 +525,10 @@ async function downloadItems(files, mediaPrefs){
         prefs["headers"] = dwnHeader;
         let token = {};
         token["name"] = "X-Plex-Token";
-        token["value"] = mediaPrefs["server"]["accessToken"];
+        token["value"] = SharedServers[srvID]["accessToken"];
         prefs["headers"].push(token);
         for (let i = 0; i < itemsDwn.length; i++){
-            prefs["url"] = `${mediaPrefs["server"]["address"].slice(0, -16)}${itemsDwn[i]["key"]}?download=1`;
+            prefs["url"] = `${srvAddress}${itemsDwn[i]["key"]}?download=1`;
             prefs["filename"] = itemsDwn[i]["filename"];
             chrome.runtime.sendMessage({ event: 'download', prefs: prefs });
         }
@@ -344,9 +537,23 @@ async function downloadItems(files, mediaPrefs){
     }
 }
 
-async function download(mediaPrefs){
-    let files = await getMediaList(mediaPrefs);
-    createFileSelect(files, mediaPrefs);
+async function download(srvAddress, key){
+    let files = await getMediaList(srvAddress, key);
+    createFileSelect(files, srvAddress);
+}
+
+//Send list of shared servers to the backend as well as the product name
+async function setGlobalVars() {
+    const prefs = {"servers": Object.keys(SharedServers), "product": header["X-Plex-Product"]};
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ event: 'setGlobalVars', prefs: prefs }, senderResponse => {
+            if (senderResponse){
+                resolve(senderResponse);
+            } else {
+                reject();
+            }
+        });
+    });
 }
 
 // Get User Info, and return a JSON with the info, or null if failed
