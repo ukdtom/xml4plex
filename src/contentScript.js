@@ -10,13 +10,6 @@ var modalObserver;
 
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    /*
-    // Remove footer if already present
-    const elFooter = document.getElementById(`${header["X-Plex-Product"]}ModalFooter`);
-    if (elFooter){
-        elFooter.remove(); // Removes the footer from the modal again
-    }
-        */
     if (request["event"] == "gotMedia"){
         gotMedia(request);
     }
