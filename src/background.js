@@ -14,23 +14,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // return true to indicate you want to send a response asynchronously
 });
 
-
-//Download filename listner
-chrome.downloads.onDeterminingFilename.addListener(function(item, __suggest) {
-    console.log("Ged 77 item", item)
-    if (item["byExtensionName"] === product){
-        __suggest({filename: urlName[item["url"]]});
-    } 
-    
-    /*
-    else {
-         __suggest(null);
-    }
-         */
-    return true;
-});
-
-
 // URL Update listner
 chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
     if (changeInfo.url) {
@@ -82,29 +65,7 @@ async function getMedia(prefs){
 
 // Download a media
 function download(prefs) {
-    const supportedSubs = ["srt", "smi", "ssa", "ass", "vtt"];
-    let ext = prefs["filename"].split('.').pop();
-    chrome.downloads.download(prefs, function(downloadId) {
-        //if (prefs["filename"].endsWith("srt")){
-        if (supportedSubs.includes(ext.toLowerCase())){
-            urlName[prefs["url"]] = `${prefs["filename"]}.${ext}`;
-        } else {
-            urlName[prefs["url"]] = prefs["filename"];
-        }
-        if (downloadId) {
-          const msg = `Downloaded file: "${prefs.filename}" ok`;
-          console.log(msg);
-        } else {
-          var error = chrome.runtime.lastError.toString();
-          if (error.indexOf('Download canceled by the user') >= 0) {
-            const msg = `Save canceled`;
-            console.log(msg);
-          } else {
-            const msg = `We had an error: "${error}"`;
-            console.log(msg);
-          }
-        }
-    });
+    chrome.downloads.download(prefs);
 }
 
 // Returns the authentication_token from the cookies
