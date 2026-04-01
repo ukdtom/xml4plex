@@ -227,7 +227,7 @@ async function fetchWithTimeout(uri, options = {}) {
 
 // Get a list of files/streams to present to the user
 async function getMediaList(srvAddress, key){
-    const url = `${srvAddress}/library/metadata/${key}`;
+    const url = `${srvAddress}/library/metadata/${key}?checkFiles=1`;
     const srvID = getIDFromURL(document.URL);
     // Start by getting the media info
     let infoHeader = JSON.parse(JSON.stringify(header));
@@ -255,39 +255,41 @@ async function getMediaList(srvAddress, key){
             let media = {};
             media["resolution"] = medias[x]["videoResolution"];
             media["Part"] = [];
-            for (let y = 0; y < medias[x]["Part"].length; y++){ //Walk the parts
-                let filename, filedir;
-                for (let z = 0; z < medias[x]["Part"][y]["Stream"].length; z++){   //Walk the streams
-                    let file = {};
-                    switch (medias[x]["Part"][y]["Stream"][z]["streamType"]){
-                        case 1: // Media file
-                            file["title"] = `${files[i]["title"]} (${medias[x]["Part"][y]["Stream"][z]["displayTitle"]})`;
-                            file["key"] = medias[x]["Part"][y]["key"];
-                            // Get filedir and filename
-                            filename = medias[x]["Part"][y]["file"];
-                            file["filename"] = filename.split('\\').pop().split('/').pop();
-                            for (let n=0; n < libPath.length; n++){ //Walk defined library paths
-                                if ((filename.startsWith(libPath[n])) && ((filename[libPath[n].length] == '/') || (filename[libPath[n].length] == '\\'))) {
-                                    file["fileDir"] = filename.slice(libPath[n].length+1).slice(0, -file["filename"].length);
-                                    if (file["fileDir"].endsWith("/") || file["fileDir"].endsWith("\\")){
-                                        file["fileDir"] = file["fileDir"].slice(0, -1);
+            if (medias[x]["Part"][0]["accessible"] && medias[x]["Part"][0]["exists"]){  //Only if file exists and can be accessed
+                for (let y = 0; y < medias[x]["Part"].length; y++){ //Walk the parts
+                    let filename, filedir;
+                    for (let z = 0; z < medias[x]["Part"][y]["Stream"].length; z++){   //Walk the streams
+                        let file = {};
+                        switch (medias[x]["Part"][y]["Stream"][z]["streamType"]){
+                            case 1: // Media file
+                                file["title"] = `${files[i]["title"]} (${medias[x]["Part"][y]["Stream"][z]["displayTitle"]})`;
+                                file["key"] = medias[x]["Part"][y]["key"];
+                                // Get filedir and filename
+                                filename = medias[x]["Part"][y]["file"];
+                                file["filename"] = filename.split('\\').pop().split('/').pop();
+                                for (let n=0; n < libPath.length; n++){ //Walk defined library paths
+                                    if ((filename.startsWith(libPath[n])) && ((filename[libPath[n].length] == '/') || (filename[libPath[n].length] == '\\'))) {
+                                        file["fileDir"] = filename.slice(libPath[n].length+1).slice(0, -file["filename"].length);
+                                        if (file["fileDir"].endsWith("/") || file["fileDir"].endsWith("\\")){
+                                            file["fileDir"] = file["fileDir"].slice(0, -1);
+                                        }
+                                        filedir = file["fileDir"];
+                                        break;
                                     }
-                                    filedir = file["fileDir"];
-                                    break;
                                 }
-                            }
-                            filename = file["filename"];
-                            files[i]["streams"].push(file);
-                            break;
-                        case 3: // Subtitle
-                            if (medias[x]["Part"][y]["Stream"][z].hasOwnProperty("key")){   //Got an external sub?
-                                file["key"] = medias[x]["Part"][y]["Stream"][z]["key"];
-                                file["title"] = medias[x]["Part"][y]["Stream"][z]["extendedDisplayTitle"];
-                                file["filename"] = `${filename.replace(/\.[^/.]+$/, "")}.${medias[x]["Part"][y]["Stream"][z]["languageTag"]}.${medias[x]["Part"][y]["Stream"][z]["format"]}.htm`;
-                                file["fileDir"] = filedir;
+                                filename = file["filename"];
                                 files[i]["streams"].push(file);
                                 break;
-                            }
+                            case 3: // Subtitle
+                                if (medias[x]["Part"][y]["Stream"][z].hasOwnProperty("key")){   //Got an external sub?
+                                    file["key"] = medias[x]["Part"][y]["Stream"][z]["key"];
+                                    file["title"] = medias[x]["Part"][y]["Stream"][z]["extendedDisplayTitle"];
+                                    file["filename"] = `${filename.replace(/\.[^/.]+$/, "")}.${medias[x]["Part"][y]["Stream"][z]["languageTag"]}.${medias[x]["Part"][y]["Stream"][z]["format"]}.htm`;
+                                    file["fileDir"] = filedir;
+                                    files[i]["streams"].push(file);
+                                    break;
+                                }
+                        }
                     }
                 }
             }
