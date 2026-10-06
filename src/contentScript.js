@@ -7,6 +7,7 @@ var header = {};
 var mediaType;
 var SharedServers = {}; // Shared servers
 var modalObserver;
+var pageType;
 
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -36,7 +37,11 @@ function getIDFromURL(url){
 // Returns a media key from the current url
 function getKeyFromUrl(){
     let key = document.URL.slice(document.URL.indexOf("metadata%2F") + 11);
-    return key.slice(0, key.indexOf("&"));
+    if (key.indexOf("&") > -1){
+        return key.slice(0, key.indexOf("&"));
+    } else {
+        return key;
+    }
 }
 
 // Returns index of n'th orcurrence of a substring in a string
@@ -50,13 +55,14 @@ const delay = millis => new Promise((resolve, reject) => {
 });
 
 async function injectFooter(url){
+    console.log("Ged 112 pageType", pageType)
     const srvID = getIDFromURL(url);
     const urlXML = `${SharedServers[srvID]["address"]}/library/metadata/${getKeyFromUrl(url)}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[srvID]["accessToken"]}`;
     let modalContent = document.getElementsByClassName("modal-content");
     if (modalContent.length > 0){
         // Create modal footer, but if there already remove it first
         const divModalFooterName = `${header["X-Plex-Product"]}ModalFooter`;
-        await delay(1000);   // Delay 500 millesec to allow the modal to be populated coreectly
+        await delay(1000);   // Delay 1000 millesec to allow the modal to be populated coreectly
         // If footer is not already present, then create it as well as the bottom div
         let divModalFooter = document.getElementById(divModalFooterName);
         if (!divModalFooter){
@@ -129,14 +135,27 @@ async function gotMedia(request){
             let myHeader = JSON.parse(JSON.stringify(header));
             myHeader["X-Plex-Token"] =SharedServers[id]["accessToken"];
             let jsonResponse;
+            console.log("Ged 31 url", url)
+            console.log("Ged 31-3 header", myHeader)
+            console.log("Ged 31-5 servers", SharedServers)
+            console.log("Ged 31-7 request", request)
             try {
                 await fetch(url, {headers: myHeader}).then( async response => {
                     if (response.ok){
                         jsonResponse = await response.json();
+                    } else {
+                        console.error(`response returned was: ${response}`);
                     }
                 });
             } catch(error) {
                 alert(`JSON download failed for url: ${url} with the error: ${error}`);
+            }
+
+            try {
+                pageType = JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"]));
+                console.log("Ged 33 type", pageType)
+            } catch {
+                console.log("Ged 33-3 No type", JSON.stringify(jsonResponse))
             }
             if (validTypes.includes(JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"])))){
                 watchForModal(document.body);

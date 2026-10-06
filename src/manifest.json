@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "XML4Plex",
-  "version": "0.0.02",
+  "version": "0.0.3",
   "description": "Show XML for a shared server",
   "content_scripts": [
     {
@@ -20,6 +20,9 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "permissions" : [
     "tabs",
     "downloads",
