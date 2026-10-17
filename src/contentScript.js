@@ -16,6 +16,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
+class queueStatus {
+    static stopped = "Stopped";
+    static running = "Running"
+}
+
 main();
 
 // Main entry point
@@ -25,6 +30,7 @@ async function main(){
     }
     header = await setHeader();    //Set the web requests header
     getSharedServers();
+    await browser.storage.local.set({"queueStatus": {"status": "Stopped"}});
 }
 
 //#region Internal functions
@@ -55,7 +61,6 @@ const delay = millis => new Promise((resolve, reject) => {
 });
 
 async function injectFooter(url){
-    console.log("Ged 112 pageType", pageType)
     const srvID = getIDFromURL(url);
     const urlXML = `${SharedServers[srvID]["address"]}/library/metadata/${getKeyFromUrl(url)}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[srvID]["accessToken"]}`;
     let modalContent = document.getElementsByClassName("modal-content");
@@ -135,10 +140,6 @@ async function gotMedia(request){
             let myHeader = JSON.parse(JSON.stringify(header));
             myHeader["X-Plex-Token"] =SharedServers[id]["accessToken"];
             let jsonResponse;
-            console.log("Ged 31 url", url)
-            console.log("Ged 31-3 header", myHeader)
-            console.log("Ged 31-5 servers", SharedServers)
-            console.log("Ged 31-7 request", request)
             try {
                 await fetch(url, {headers: myHeader}).then( async response => {
                     if (response.ok){
@@ -153,9 +154,7 @@ async function gotMedia(request){
 
             try {
                 pageType = JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"]));
-                console.log("Ged 33 type", pageType)
             } catch {
-                console.log("Ged 33-3 No type", JSON.stringify(jsonResponse))
             }
             if (validTypes.includes(JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"])))){
                 watchForModal(document.body);
@@ -269,6 +268,18 @@ async function getMediaList(srvAddress, key){
         files[i]["title"] = metadata[i]["title"];
         files[i]["type"] = metadata[i]["type"];
         files[i]["streams"] = [];
+        if (metadata[i].hasOwnProperty("grandparentTitle")){
+            files[i]["showTitle"] = metadata[i]["grandparentTitle"];
+        }
+        if (metadata[i].hasOwnProperty("parentIndex")){
+            files[i]["season"] = metadata[i]["parentIndex"];
+        }
+        if (metadata[i].hasOwnProperty("index")){
+            files[i]["episode"] = metadata[i]["index"];
+        }
+        if (metadata[i].hasOwnProperty("summary")){
+            files[i]["summary"] = metadata[i]["summary"];
+        }
         let medias = metadata[i]["Media"];
         for (let x = 0; x < medias.length; x++){    // Walk Media array
             let media = {};
@@ -305,6 +316,7 @@ async function getMediaList(srvAddress, key){
                                     file["title"] = medias[x]["Part"][y]["Stream"][z]["extendedDisplayTitle"];
                                     file["filename"] = `${filename.replace(/\.[^/.]+$/, "")}.${medias[x]["Part"][y]["Stream"][z]["languageTag"]}.${medias[x]["Part"][y]["Stream"][z]["format"]}.htm`;
                                     file["fileDir"] = filedir;
+                                    file["language"] = medias[x]["Part"][y]["Stream"][z]["language"];
                                     files[i]["streams"].push(file);
                                     break;
                                 }
@@ -447,6 +459,9 @@ async function downloadItems(files, srvAddress){
     }
     fileSelectModalClose();
     if (itemsDwn.length > 0){
+        //await browser.storage.local.clear();
+        let arrQueue = await getArrQueue();
+        console.log("Ged 86-3 Start arrQueue", arrQueue)
         // Make the prefs
         let prefs = {};
         prefs["saveAs"] = false;
@@ -472,10 +487,57 @@ async function downloadItems(files, srvAddress){
             prefs["url"] = `${srvAddress}${stream["key"]}?download=1`;
             prefs["filename"] = `${stream["fileDir"]}/${stream["filename"]}`;
             chrome.runtime.sendMessage({ event: 'download', prefs: prefs });
+            let queueItem = {};
+            queueItem["title"] = files[0]["title"];
+            queueItem["type"] = files[0]["type"];
+            queueItem["srvID"] = srvID;
+            queueItem["key"] = stream["key"];
+            if (files[0].hasOwnProperty("showTitle")){
+                queueItem["showTitle"] = files[0]["showTitle"];
+            }
+            if (files[0].hasOwnProperty("season")){
+                queueItem["season"] = files[0]["season"];
+            }
+            if (files[0].hasOwnProperty("episode")){
+                queueItem["episode"] = files[0]["episode"];
+            }
+            queueItem["fileName"] = `${stream["fileDir"]}/${stream["filename"]}`;
+            if (queueItem["fileName"].endsWith(".htm")){    // Subtitle file
+                queueItem["displayTitle"] = `${files[0]["title"]} ${stream["title"]}`;
+                queueItem["type"] = "subtitle";
+                queueItem["fileName"] = queueItem["fileName"].slice(0, -4);  // Remove the .htm extension
+            } else
+            {
+                queueItem["displayTitle"] = `${files[0]["title"]} (${queueItem["type"]})`;
+                if (files[0].hasOwnProperty("summary")){
+                    queueItem["summary"] = files[0]["summary"];
+                }
+            }
+            if (queueItem["key"].includes("/library/parts/")){
+                // Remove the /library/parts/ from the key and get the first 2 parts of the key to create an id
+                let arrID = queueItem["key"].slice(queueItem["key"].indexOf("/library/parts/")+15).split("/");
+                queueItem["id"] = `${arrID[0]}-${arrID[1]}`;
+            } else {
+                let arrID = queueItem["key"].split("/");
+                queueItem["id"] = `${queueItem["srvID"]}-${arrID[3]}`;
+            }
+            arrQueue.push(queueItem);
         }
+        await setArrQueue(arrQueue);
     } else {
         alert("Nothing selected for download")
     }
+}
+
+// Get a list of items in the download queue
+async function getArrQueue(){
+    let arrQueue = await browser.storage.local.get(["arrQueue"]);
+    return arrQueue["arrQueue"] || [];
+}
+
+// Set a list of items in the download queue
+async function setArrQueue(arrQueue){
+    await browser.storage.local.set({"arrQueue": arrQueue});
 }
 
 async function download(srvAddress, key){

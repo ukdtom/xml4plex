@@ -65,6 +65,7 @@ async function getMedia(prefs){
 
 // Download a media
 function download(prefs) {
+    console.log("Ged 9 background download prefs", prefs)
     chrome.downloads.download(prefs);
 }
 

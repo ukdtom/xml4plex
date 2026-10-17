@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" style="height:400px; width:800px">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="queue.css">
+        <title>xmlQueue</title>
+    </head>
+    <body>
+      <div id="main" class="main">
+        <div class="listbox-area">
+          <div class="left-area">
+            <span id="ss_imp_l" class="listbox-label">Download Queue:</span>
+            <ul id="ss_imp_list" tabindex="0" role="listbox" aria-labelledby="ss_imp_l">
+            </ul>
+            <div role="toolbar" aria-label="Actions" class="toolbar">
+              <button type="button" id="ex1-up" class="toolbar-item selected" aria-keyshortcuts="Alt+ArrowUp" aria-disabled="true">
+                Up
+              </button>
+              <button type="button" id="ex1-down" class="toolbar-item" tabindex="-1" aria-keyshortcuts="Alt+ArrowDown" aria-disabled="true">
+                Down
+              </button>
+              <button type="button" id="ex1-delete" class="toolbar-item" tabindex="-1" aria-keyshortcuts="Alt+ArrowRight Delete" aria-disabled="true">
+                <span class="checkmark" aria-hidden="true"></span>
+                Delete
+              </button>
+              <button type="button" id="ex1-clear" class="toolbar-item" tabindex="-1" aria-disabled="true">
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="info" class="info">
+          <p>Click on an item in the queue to see more information about it.</p>
+        </div>
+        <div class="right-area" style="display: none;">
+          <span id="ss_unimp_l" class="listbox-label">Unimportant Features:</span>
+          <ul id="ss_unimp_list" tabindex="0" role="listbox" aria-labelledby="ss_unimp_l" aria-activedescendant=""></ul>
+          <button type="button" id="ex1-add" class="move-left-btn" aria-keyshortcuts="Alt+ArrowLeft Enter" aria-disabled="true">
+            <span class="checkmark" aria-hidden="true"></span>
+            Important
+          </button>
+        </div>
+        <div class="offscreen">Last change: <span aria-live="polite" id="ss_live_region"></span></div>
+      </div>
+      <div id="queue" class="queue">
+        <p>Hello Queue</p>
+        <div id = "queueStatus">
+          <p>Queue Status: </p>
+        </div>
+      </div>
+    </body>
+    <script type="module" src="queue.js"></script>
+</html>
