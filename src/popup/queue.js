@@ -19,16 +19,61 @@
  */
 var aria = aria || {};
 
+
 // #region xml4Plex
 
+// #region Message listner and handler
+
+// Requests allowed
+const validRequests = ['downloadStatus'];
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (sender.id === chrome.runtime.id && validRequests.includes(request.event)){
+        handleListener(request).then(sendResponse);
+        return true; // return true to indicate you want to send a response asynchronously
+    } else {
+        console.error("Ged 3-3 unauthorized request", request.event)
+    }
+});
+
+// Handle events
+async function handleListener(request){
+    let result = null;
+    const { event, prefs } = request;
+    switch (event) {
+        case 'downloadStatus':
+            result = setdownloadStatus(prefs);
+            break;
+        default:
+            break;
+    }
+    return result;
+}
+
+// #endregion
+
+
+
 var arrQueue = [];
-let elList = document.getElementById('ss_imp_list');
+var elList = document.getElementById('ss_imp_list');
+var bQueueRunning;
+const manifest = chrome.runtime.getManifest();
+//var queueRunning;   // Boolean for queueRunning
+
+queueRunning(); //Init storage var if needed
 
 // Get a list of items in the download queue
 async function getArrQueue(){
     let arrQueue = await browser.storage.local.get(["arrQueue"]);
     console.log('Ged 286-0 getArrQueue', arrQueue["arrQueue"] || [])
     return arrQueue["arrQueue"] || [];
+}
+
+// Show what is currently been downloaded
+function setdownloadStatus(prefs){
+    const currentDwn = document.getElementById('currentDwn');
+    currentDwn.innerHTML = prefs;
+
 }
 
 // Show info for the selected item
@@ -58,51 +103,111 @@ async function showInfo(id){
     info.innerHTML = txt;
 }
 
+async function updateQueueListBox(){
+    arrQueue = await getArrQueue();
+    const listbox = new aria.Listbox(elList);
+    if (arrQueue.length > 0){
+        arrQueue.forEach(function (arrayItem) {
+        const listItem = document.createElement('li');
+        listItem.setAttribute('role', 'option');
+        listItem.setAttribute('id', `ss_elem_${arrayItem["id"]}`);
+        listItem.textContent = arrayItem["displayTitle"];
+        const span = document.createElement('span');
+        span.setAttribute('class', 'checkmark');
+        span.setAttribute('aria-hidden', 'true');
+        listItem.appendChild(span);
+        elList.appendChild(listItem);
+        });
+    }
+}
+
 /**
  * Populate the listbox with the download queue
  */
 async function populateQueue() {
-  //await browser.storage.local.set({"arrQueue": []});  // Reset/Delete the queue
-  arrQueue = await getArrQueue();
-  const listbox = new aria.Listbox(elList);
-  if (arrQueue.length > 0){
-    arrQueue.forEach(function (arrayItem) {
-      const listItem = document.createElement('li');
-      listItem.setAttribute('role', 'option');
-      listItem.setAttribute('id', `ss_elem_${arrayItem["id"]}`);
-      listItem.textContent = arrayItem["displayTitle"];
-      const span = document.createElement('span');
-      span.setAttribute('class', 'checkmark');
-      span.setAttribute('aria-hidden', 'true');
-      listItem.appendChild(span);
-      elList.appendChild(listItem);
-    });
+    await updateQueueListBox();
+
+    bQueueRunning = await queueRunning();
+    addButtons();
 
     // Show info for the first item in the queue
-   showInfo('click');
-    addClearButton();
+    //showInfo('click');
+    /*
   } else {
     showInfo(null)
   }
+    */
+
+  arrQueue.length > 0 ? showInfo('click') : showInfo(null);
+
   elList.focus();
+  /*
   if (listbox.activeDescendant){
     const id = listbox.activeDescendant.slice(8);
     showInfo(id)
   }
-  await browser.storage.local.set({"queueStatus": "Stopped"});
-  console.log("Ged 1 **** CHECK THIS ****")
-  const queueStatus = document.getElementById('queueStatus');
-  const queueRunningStatus = await browser.storage.local.get("queueStatus");
-  queueStatus.innerHTML = `<b>Queue Status:</b> ${queueRunningStatus["queueStatus"]}`;
+    */
+  showQueueStatus();
+}
+
+// Show Queue status and set queue button in the UI
+async function showQueueStatus(){
+    const queueStatus = document.getElementById('queueStatus');
+    let htmlStatus = bQueueRunning? "<b>Queue:</b> Running": "<b>Queue:</b> Stopped";
+    queueStatus.innerHTML = htmlStatus;
+    const txtButton = bQueueRunning? "Stop Queue": "Start Queue";
+    const btnQueue = document.getElementById('btnQueue');
+    btnQueue.innerText = txtButton;
+    if (arrQueue.length > 0){
+        btnQueue.setAttribute('aria-disabled', !bQueueRunning.toString());
+        btnQueue.disabled = false;
+    } else {
+        btnQueue.setAttribute('aria-disabled', 'true');
+        btnQueue.disabled = true;
+    }
 }
 
 async function getQueueByID(id){
+    console.log("Ged 55 id", id)
     return arrQueue.filter(record => {
         return record.id === id;
     })[0]
 }
 
-function addClearButton(){
+
+/*If value is not defined, we return a boolean for for the queue status
+If value is a boolean, we set the queue status to that, as well as update
+the global var bQueueRunning */
+async function queueRunning(value){
+    if (typeof value === 'boolean'){
+        await browser.storage.local.set({"queueRunning": value});
+        bQueueRunning = value;
+    } else {
+        const storeItems = await browser.storage.local.getKeys()
+        if (!storeItems.includes("queueRunning")){
+            await browser.storage.local.set({"queueRunning": false})
+            bQueueRunning = false;
+            //return false;
+        } else {
+            bQueueRunning = (await browser.storage.local.get("queueRunning"))["queueRunning"];
+            //return bQueueRunning
+        }
+    }
+    showQueueStatus();
+    chrome.runtime.sendMessage({ event: 'downloadQueue', prefs: bQueueRunning });
+    return bQueueRunning
+}
+
+// Toogle queue status
+async function toggleQueue(){
+    if (bQueueRunning){
+        alert('Existing download will continue until done');
+    }
+    await queueRunning(!bQueueRunning);
+}
+
+async function addButtons(){
+    // Queue Clear All botton
     let clearButton = document.getElementById('ex1-clear')
     clearButton.addEventListener("click", clearAll);
     if (arrQueue.length > 0){
@@ -110,6 +215,10 @@ function addClearButton(){
     } else {
         clearButton.setAttribute('aria-disabled', 'true');
     }
+    // Queue button
+    const btnQueue = document.getElementById('btnQueue');
+    btnQueue.addEventListener("click", toggleQueue);
+    showQueueStatus();
 }
 
 async function clearAll(){
@@ -125,9 +234,10 @@ async function clearAll(){
         }
     });
     listbox.clearActiveDescendant();
+    showInfo(null)
 }
 
-async function saveListBox(){
+async function saveListBox(clearInfo){
     let newQueue = [];
     const listbox = new aria.Listbox(document.getElementById('ss_imp_list'));
     const el = document.querySelectorAll('li');
@@ -144,6 +254,9 @@ async function saveListBox(){
         arrQueue = [];
     }
     await await browser.storage.local.set({"arrQueue": arrQueue});
+    if (clearInfo){
+        showInfo('click')
+    }
 }
 
 
@@ -196,7 +309,9 @@ aria.Listbox = class Listbox {
   setupFocus() {
     if (this.activeDescendant) {
       const listitem = document.getElementById(this.activeDescendant);
-      listitem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (listitem){    //Injected xml4Plex
+        listitem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
     } else {
       this.focusFirstItem();
     }
@@ -730,7 +845,7 @@ aria.Listbox = class Listbox {
     );
 
     this.handleItemChange('removed', itemsToDelete);
-    saveListBox();
+    saveListBox(true);
     return itemsToDelete;
   }
 

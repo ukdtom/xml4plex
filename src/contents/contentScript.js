@@ -8,6 +8,7 @@ var mediaType;
 var SharedServers = {}; // Shared servers
 var modalObserver;
 var pageType;
+const manifest = chrome.runtime.getManifest();
 
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -16,21 +17,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-class queueStatus {
-    static stopped = "Stopped";
-    static running = "Running"
-}
-
 main();
 
 // Main entry point
 async function main(){
+    //await browser.storage.local.set({"arrQueue": []});  // Reset/Delete the queue
+    //await browser.storage.local.clear();  // Clear all storage
+    //await browser.storage.local.remove("queueRunning")
     if (!user.hasOwnProperty("id")){    //Need to get user info from the cookie
         user = await getPlexCookie("https://app.plex.tv", "plex_tv_auth");
     }
     header = await setHeader();    //Set the web requests header
     getSharedServers();
-    await browser.storage.local.set({"queueStatus": {"status": "Stopped"}});
 }
 
 //#region Internal functions
@@ -227,6 +225,7 @@ async function getAddressAndInfo(srvInfo, myHeader){
             }
         }
     }
+    chrome.runtime.sendMessage({ event: 'sharedServers', prefs: SharedServers});
 }
 
 // Fetch with a default timeout with a default of 8000 millisec
@@ -447,7 +446,7 @@ async function createFileSelect(files, srvAddress){
     fileSelectModalContent.appendChild(fileSelectModalFooter);
 }
 
-// Initiate the download
+// Initiate the download selection view
 async function downloadItems(files, srvAddress){
     const srvID = getIDFromURL(document.URL);
     let itemsDwn = [];
@@ -486,7 +485,6 @@ async function downloadItems(files, srvAddress){
             let stream = JSON.parse(JSON.stringify(files[0]["streams"][itemsDwn[i]]));
             prefs["url"] = `${srvAddress}${stream["key"]}?download=1`;
             prefs["filename"] = `${stream["fileDir"]}/${stream["filename"]}`;
-            chrome.runtime.sendMessage({ event: 'download', prefs: prefs });
             let queueItem = {};
             queueItem["title"] = files[0]["title"];
             queueItem["type"] = files[0]["type"];
@@ -547,7 +545,8 @@ async function download(srvAddress, key){
 
 //Send list of shared servers to the backend as well as the product name
 async function setGlobalVars() {
-    const prefs = {"servers": Object.keys(SharedServers), "product": header["X-Plex-Product"]};
+    //const prefs = {"servers": Object.keys(SharedServers), "product": header["X-Plex-Product"], "serversInfo": SharedServers};
+    const prefs = {"servers": Object.keys(SharedServers)};
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({ event: 'setGlobalVars', prefs: prefs }, senderResponse => {
             if (senderResponse){
@@ -576,7 +575,6 @@ async function getPlexCookie(domain, name, callback) {
 //Set the header used for web requests, but don't set the token
 async function setHeader(){
     if (!header.hasOwnProperty("Accept")){  // We need to set the header
-        let manifest = chrome.runtime.getManifest();
         header["Accept"] = "application/json";
         header["X-Plex-Product"] = manifest["name"];
         header["X-Plex-Version"] = manifest["version"];
@@ -584,19 +582,20 @@ async function setHeader(){
             header["X-Plex-Client-Identifier"] = await getStoredKey("cID");
         } catch {   // Not found, so we need to set one
             let cID = `${(user["thumb"]).split("=")[1]}${user["uuid"]}`;
-            await chrome.storage.sync.set(    // Store the new cID
+            await chrome.storage.local.set(    // Store the new cID
                 { cID: cID }
             );
             header["X-Plex-Client-Identifier"] = cID;
         }
     }
+    chrome.storage.local.set({header: header})
     return header;
 }
 
 // Get stored value from synced storage
 const getStoredKey = async (key) => {
     return new Promise((resolve, reject) => {
-      chrome.storage.sync.get([key], function (result) {
+      chrome.storage.local.get([key], function (result) {
         if (result[key] === undefined) {
             reject(false);
         } else {
