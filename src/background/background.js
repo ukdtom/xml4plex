@@ -1,5 +1,7 @@
 "use strict";
-import {encryptValue, decryptValue} from './crypto.js'
+import {encryptValue, decryptValue} from './crypto.js';
+import {queue} from './queue.js';
+import {QueueDwn} from './queue2.js'
 
 // Global vars
 var servers = [];
@@ -8,11 +10,12 @@ var bQueueRunning = false;
 var arrQueue = [];
 const manifest = chrome.runtime.getManifest();
 var dID;    // Current download ID
+const QueueDown = new QueueDwn();
 
 //#region Event Listners and handlers
 
 // Requests allowed
-const validRequests = ['downloadQueue', 'getPlexCookie', 'setGlobalVars', 'sharedServers', 'download'];
+const validRequests = ['downloadQueue', 'getPlexCookie', 'setGlobalVars', 'sharedServers', 'queueAdd', 'queue'];
 
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -53,9 +56,6 @@ async function handleListener(request){
         case 'getPlexCookie':
             result = await getPlexCookie(prefs);
             break;
-        case 'download***DELETE***TODO****':
-            download(prefs);
-            break;
         case 'downloadQueue':
             downloadQueue(prefs)
             break;
@@ -66,6 +66,11 @@ async function handleListener(request){
            serversInfo = prefs;
            setServerInfo(serversInfo);
            break;
+        case 'queue':
+            console.log("Ged 45 queue prefs", prefs)
+            queue(prefs);
+            QueueDown.enqueue(prefs)
+            break;
         default:
             break;
     }
@@ -90,10 +95,14 @@ async function dwnWatch(downloadDelta){
                         break;
                     }
                 }
-                console.log("Ged 12-3 queue, length", JSON.parse(JSON.stringify(arrQueue)), arrQueue.length)
                 if (arrQueue.length < 1){
                     bQueueRunning = false;
                     await browser.storage.local.set({'queueRunning': false})
+                    let updatePrefs = {};
+                    updatePrefs['currentFile'] = await activeDownload(dID);
+                    updatePrefs['queueRunning'] = bQueueRunning;
+                    updatePrefs['queue'] = arrQueue;
+                    chrome.runtime.sendMessage({ event: 'update', prefs: updatePrefs});
                 } else {
                     downloadQueue(true)
                 }
@@ -164,10 +173,17 @@ async function downloadQueueMedia(){
         prefs['filename'] = item['fileName'];
         prefs['url'] = `${srvInfo['address']}${item['key']}?download=1`;
         prefs['saveAs'] = false;
-        dID = await chrome.downloads.download(prefs);
+        dID = await chrome.downloads.download(prefs);   // Start the download
         await browser.storage.local.set({'dID': dID});  // Set in store to make it persistent
         activeDownload(dID);
     }
+    let updatePrefs = {};
+    //updatePrefs['dID'] = dID;
+    updatePrefs['currentFile'] = await activeDownload(dID);
+    updatePrefs['queueRunning'] = bQueueRunning;
+    updatePrefs['queue'] = arrQueue;
+    chrome.runtime.sendMessage({ event: 'update', prefs: updatePrefs});
+
 }
 
 // Extract info about the current download, and sends it to the queue window GUI
@@ -186,8 +202,8 @@ async function activeDownload(dID){
         }
     }
     chrome.runtime.sendMessage({ event: 'downloadStatus', prefs: txt});
+    return txt;
 }
-
 
 //Checks downloads and return either null if we are not downloading anything, or the id of the item we download
 async function getActiveDownloads(){
@@ -201,12 +217,6 @@ async function getActiveDownloads(){
         }
     }
     return retval
-}
-
-// Download a media
-function download(prefs) {
-    console.log("Ged 9 background download prefs", prefs)
-    chrome.downloads.download(prefs);
 }
 
 // Returns the authentication_token from the cookies

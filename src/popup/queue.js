@@ -25,7 +25,7 @@ var aria = aria || {};
 // #region Message listner and handler
 
 // Requests allowed
-const validRequests = ['downloadStatus'];
+const validRequests = ['downloadStatus', 'update'];
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (sender.id === chrome.runtime.id && validRequests.includes(request.event)){
@@ -44,6 +44,9 @@ async function handleListener(request){
         case 'downloadStatus':
             result = setdownloadStatus(prefs);
             break;
+        case 'update':
+            update(prefs);
+            break;
         default:
             break;
     }
@@ -58,9 +61,22 @@ var arrQueue = [];
 var elList = document.getElementById('ss_imp_list');
 var bQueueRunning;
 const manifest = chrome.runtime.getManifest();
-//var queueRunning;   // Boolean for queueRunning
 
 queueRunning(); //Init storage var if needed
+
+/*
+* Updates the Queue window with queue status
+* Set the txt and enable/disable for queue button
+* Set the txt for what is currently been downloaded
+* Update the queue list
+*/
+async function update(prefs){
+    console.log("Ged 82-2 update prefs", prefs)
+    bQueueRunning = prefs.queueRunning;
+    setdownloadStatus(prefs.currentFile);   // Update what file is currently downloading
+    updateQueueListBox2(prefs.queue)
+
+}
 
 // Get a list of items in the download queue
 async function getArrQueue(){
@@ -73,7 +89,6 @@ async function getArrQueue(){
 function setdownloadStatus(prefs){
     const currentDwn = document.getElementById('currentDwn');
     currentDwn.innerHTML = prefs;
-
 }
 
 // Show info for the selected item
@@ -101,6 +116,53 @@ async function showInfo(id){
             break;
     }
     info.innerHTML = txt;
+}
+
+async function updateQueueListBox2(arrQueue){
+    //arrQueue = await getArrQueue();
+
+    // Start by getting the current selected one
+    const elSelected = elList.ariaActiveDescendantElement;
+    let selId = null;
+    if (elSelected){    // Get selected item from the listbox, or keep it as null if nothis is selected
+        selId = elSelected.id.slice(8);
+    }
+
+    // Remove all list items
+    const el = document.querySelectorAll('li');
+    el.forEach(function(node) {
+        let id = node.id;
+        let item = document.getElementById(id);
+        if (item){
+            item.remove();
+        }
+    });
+    elList.ariaActiveDescendantElement = null;
+    const selectedID = await getQueueByID(selId)
+    // Now build the listbox again
+    if (arrQueue.length > 0){
+        arrQueue.forEach(function (arrayItem) {
+            const listItem = document.createElement('li');
+            listItem.setAttribute('role', 'option');
+            listItem.setAttribute('id', `ss_elem_${arrayItem["id"]}`);
+            listItem.textContent = arrayItem["displayTitle"];
+            const span = document.createElement('span');
+            span.setAttribute('class', 'checkmark');
+            span.setAttribute('aria-hidden', 'true');
+            listItem.appendChild(span);
+            elList.appendChild(listItem);
+        });
+        if (selectedID){    // If some element was selected before, select it again and show the info
+            showInfo(selId);
+            elList.setAttribute('aria-activedescendant', `ss_elem_${selId}`);
+        } else {
+            showInfo('click');
+        }
+    } else {    // Queue is now empty, so update status and button text
+        console.log("Ged 18-5 showinfo null")
+        showInfo(null);
+        showQueueStatus();
+    }
 }
 
 async function updateQueueListBox(){
@@ -167,15 +229,14 @@ async function showQueueStatus(){
     }
 }
 
+// Return Queue record from an id
 async function getQueueByID(id){
-    console.log("Ged 55 id", id)
     return arrQueue.filter(record => {
         return record.id === id;
     })[0]
 }
 
-
-/*If value is not defined, we return a boolean for for the queue status
+/*If value is not defined, we return a boolean for the queue status
 If value is a boolean, we set the queue status to that, as well as update
 the global var bQueueRunning */
 async function queueRunning(value){
@@ -187,10 +248,8 @@ async function queueRunning(value){
         if (!storeItems.includes("queueRunning")){
             await browser.storage.local.set({"queueRunning": false})
             bQueueRunning = false;
-            //return false;
         } else {
             bQueueRunning = (await browser.storage.local.get("queueRunning"))["queueRunning"];
-            //return bQueueRunning
         }
     }
     showQueueStatus();
@@ -258,7 +317,6 @@ async function saveListBox(clearInfo){
         showInfo('click')
     }
 }
-
 
 // #endregion
 

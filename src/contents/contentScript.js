@@ -1,5 +1,7 @@
 "use strict";
 
+(async () => {await browser.storage.local.clear()})();  // Clear all storage
+
 const validTypes = ["movie", "episode"];
 var blocklist = []; // Avoid multiple calls
 var user = {};      // Plex user
@@ -10,20 +12,41 @@ var modalObserver;
 var pageType;
 const manifest = chrome.runtime.getManifest();
 
+
+//#region Event Listners and handlers
+
+// Requests allowed
+const validRequests = ['gotMedia'];
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request["event"] == "gotMedia"){
-        gotMedia(request);
+    if (sender.id === chrome.runtime.id && validRequests.includes(request.event)){  // Only accept if it came from us and is a valid request
+        handleListener(request).then(sendResponse);
+        return true; // return true to indicate you want to send a response asynchronously
+    } else {
+        console.error("Ged 3-3 unauthorized request", request.event)
     }
 });
+
+// Handle events
+async function handleListener(request){
+    let result = null;
+    const { event, prefs } = request;
+    switch (event) {
+        case 'gotMedia':
+            gotMedia(request);
+            break;
+        default:
+            break;
+    }
+    return result;
+}
+
+//#endregion
 
 main();
 
 // Main entry point
 async function main(){
-    //await browser.storage.local.set({"arrQueue": []});  // Reset/Delete the queue
-    //await browser.storage.local.clear();  // Clear all storage
-    //await browser.storage.local.remove("queueRunning")
     if (!user.hasOwnProperty("id")){    //Need to get user info from the cookie
         user = await getPlexCookie("https://app.plex.tv", "plex_tv_auth");
     }
@@ -519,6 +542,9 @@ async function downloadItems(files, srvAddress){
                 let arrID = queueItem["key"].split("/");
                 queueItem["id"] = `${queueItem["srvID"]}-${arrID[3]}`;
             }
+            await chrome.runtime.sendMessage({ event: 'queue', prefs: { action: 'add', data: queueItem }});
+            // TODO
+
             arrQueue.push(queueItem);
         }
         await setArrQueue(arrQueue);
@@ -535,6 +561,7 @@ async function getArrQueue(){
 
 // Set a list of items in the download queue
 async function setArrQueue(arrQueue){
+    console.log("Ged 99 sending to queue", arrQueue)
     await browser.storage.local.set({"arrQueue": arrQueue});
 }
 
