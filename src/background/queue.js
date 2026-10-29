@@ -170,9 +170,9 @@ async function addMedia(data){
     entry['type'] = data['type'];
     entry['summary'] = data['summary'];
     arrQueueObj[id] = entry;
-    await browser.storage.local.set({'arrQueueObj': arrQueueObj});  // Set in store to make it persistent
+    //await browser.storage.local.set({'arrQueueObj': arrQueueObj});  // Set in store to make it persistent
     arrQueueOrder.push(id);
-    await browser.storage.local.set({'arrQueueOrder': arrQueueOrder});  // Set in store to make it persistent
+    //await browser.storage.local.set({'arrQueueOrder': arrQueueOrder});  // Set in store to make it persistent
 }
 
 // Get Current info or init if not existing
@@ -180,12 +180,12 @@ async function getCurrent(){
     arrQueueOrder = (await browser.storage.local.get('arrQueueOrder')).arrQueueOrder;
     if (!arrQueueOrder){
         arrQueueOrder = [];
-        await browser.storage.local.set({'arrQueueOrder': arrQueueOrder});  // Set in store to make it persistent
+        //await browser.storage.local.set({'arrQueueOrder': arrQueueOrder});  // Set in store to make it persistent
     }
     arrQueueObj = (await browser.storage.local.get('arrQueueObj')).arrQueueObj;
     if (!arrQueueObj){
         arrQueueObj = {};
-        await browser.storage.local.set({'arrQueueObj': arrQueueObj});  // Set in store to make it persistent
+        //await browser.storage.local.set({'arrQueueObj': arrQueueObj});  // Set in store to make it persistent
     }
     console.log("Ged 13-3 arrQueueOrder", JSON.parse(JSON.stringify(arrQueueOrder)))
     console.log("Ged 13-5 arrQueueObj", JSON.parse(JSON.stringify(arrQueueObj)))
@@ -213,9 +213,9 @@ async function addSub(data){
     entry['title'] = data['title'];
     entry['type'] = data['type'];
     arrQueueObj[id] = entry;
-    await browser.storage.local.set({'arrQueueObj': arrQueueObj});  // Set in store to make it persistent
+    //await browser.storage.local.set({'arrQueueObj': arrQueueObj});  // Set in store to make it persistent
     arrQueueOrder.push(id);
-    await browser.storage.local.set({'arrQueueOrder': arrQueueOrder});  // Set in store to make it persistent
+    //await browser.storage.local.set({'arrQueueOrder': arrQueueOrder});  // Set in store to make it persistent
 }
 
 //#endregion

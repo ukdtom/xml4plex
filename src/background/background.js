@@ -1,7 +1,8 @@
 "use strict";
 import {encryptValue, decryptValue} from './crypto.js';
 import {queue} from './queue.js';
-import {QueueDwn} from './queue2.js'
+import {QueueDwn} from './queue2.js';
+import {enqueue} from './queue3.js';
 
 // Global vars
 var servers = [];
@@ -15,13 +16,16 @@ const QueueDown = new QueueDwn();
 //#region Event Listners and handlers
 
 // Requests allowed
-const validRequests = ['downloadQueue', 'getPlexCookie', 'setGlobalVars', 'sharedServers', 'queueAdd', 'queue'];
+const validRequests = ['downloadQueue', 'getPlexCookie', 'setGlobalVars', 'sharedServers', 'queueAdd', 'queue', 'enqueue'];
+const returnVal = ['sharedServers', 'getPlexCookie'];   //Requests where we want to return something from
 
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (sender.id === chrome.runtime.id && validRequests.includes(request.event)){  // Only accept if it came from us and is a valid request
         handleListener(request).then(sendResponse);
-        return true; // return true to indicate you want to send a response asynchronously
+        if (returnVal.includes(request.event)){
+            return true; // return true to indicate you want to send a response asynchronously
+        }
     } else {
         console.error("Ged 3-3 unauthorized request", request.event)
     }
@@ -41,12 +45,13 @@ chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
 // Download listner
 chrome.downloads.onChanged.addListener((downloadDelta) => {
     if (dID === downloadDelta.id){  // Only act if the download was started by us
-        dwnWatch(downloadDelta);
+        //dwnWatch(downloadDelta);
     }
 })
 
 // Handle events
 async function handleListener(request){
+    console.log("Ged 1 handleListener", request)
     let result = null;
     const { event, prefs } = request;
     switch (event) {
@@ -57,8 +62,11 @@ async function handleListener(request){
             result = await getPlexCookie(prefs);
             break;
         case 'downloadQueue':
+            break
+            /*
             downloadQueue(prefs)
             break;
+            */
         case 'setGlobalVars':
             servers = prefs["servers"];
             break;
@@ -68,8 +76,14 @@ async function handleListener(request){
            break;
         case 'queue':
             console.log("Ged 45 queue prefs", prefs)
+            break
+            /*
             queue(prefs);
             QueueDown.enqueue(prefs)
+            break;
+            */
+        case 'enqueue':
+            await enqueue(prefs);
             break;
         default:
             break;
@@ -91,7 +105,7 @@ async function dwnWatch(downloadDelta){
                 for (const idx in arrQueue){
                     if (url.includes(arrQueue[idx]['key'])){
                         arrQueue.splice(idx,1);  //Remove from queue
-                        await browser.storage.local.set({'arrQueue': arrQueue})
+                        //await browser.storage.local.set({'arrQueue': arrQueue})
                         break;
                     }
                 }

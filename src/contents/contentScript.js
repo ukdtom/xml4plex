@@ -473,6 +473,7 @@ async function createFileSelect(files, srvAddress){
 async function downloadItems(files, srvAddress){
     const srvID = getIDFromURL(document.URL);
     let itemsDwn = [];
+    let arrItemsDwn = [];   // Used by Queue3
     for (let i = 0; i < files[0]["streams"].length; i++){
         let el = document.getElementById(`item${i.toString()}`);
         if (el.checked){
@@ -542,15 +543,17 @@ async function downloadItems(files, srvAddress){
                 let arrID = queueItem["key"].split("/");
                 queueItem["id"] = `${queueItem["srvID"]}-${arrID[3]}`;
             }
-            await chrome.runtime.sendMessage({ event: 'queue', prefs: { action: 'add', data: queueItem }});
+            //await chrome.runtime.sendMessage({ event: 'queue', prefs: { action: 'add', data: queueItem }});
             // TODO
 
             arrQueue.push(queueItem);
+            arrItemsDwn.push(queueItem);    // Queue3
         }
-        await setArrQueue(arrQueue);
+        //await setArrQueue(arrQueue);
     } else {
         alert("Nothing selected for download")
     }
+    await chrome.runtime.sendMessage({ event: 'enqueue', prefs: arrItemsDwn});
 }
 
 // Get a list of items in the download queue
