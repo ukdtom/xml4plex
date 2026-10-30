@@ -1,7 +1,7 @@
 "use strict";
 import {encryptValue, decryptValue} from './crypto.js';
-import {queue} from './queue.js';
-import {QueueDwn} from './queue2.js';
+//import {queue} from './queue.js';
+//import {QueueDwn} from './queue2.js';
 import {enqueue} from './queue3.js';
 
 // Global vars
@@ -11,7 +11,7 @@ var bQueueRunning = false;
 var arrQueue = [];
 const manifest = chrome.runtime.getManifest();
 var dID;    // Current download ID
-const QueueDown = new QueueDwn();
+//const QueueDown = new QueueDwn();
 
 //#region Event Listners and handlers
 
@@ -151,7 +151,7 @@ async function downloadQueue(prefs){
             const secret = (await browser.storage.local.get('serverInfo'))['serverInfo'];
             serversInfo = JSON.parse(await decryptValue(secret));
             await getQueue();
-            const srvID = arrQueue[0]['srvID']
+            //const srvID = arrQueue[0]['srvID']
             downloadQueueMedia();
     } else {
     }

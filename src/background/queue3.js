@@ -10,10 +10,11 @@ getQueue
 
 
 // Global vars
-let queueOrder; // The order of the queue as an array
-let queueData;  // Queue items in a JSON object
+let queueOrder = null; // The order of the queue as an array
+let queueData = null;  // Queue items in a JSON object
 const prefix = 'ss_elem_';
-
+const nameOrder = 'arrQueue3Order';
+const nameData = 'objQueueData';
 
 
 //#region Exported functions
@@ -36,26 +37,23 @@ export async function enqueue(arrData){
                 break;
         }
     }
+    /*
     console.log("Ged 6-13 queueData", queueData)
 
     //await browser.storage.local.set({'Tommy1': true});
 
     //await browser.storage.local.set({'objQueue3Data': queueData});
-    await browser.storage.local.set({'objQueue3Data': "Hello"});
+    await browser.storage.local.set({'objQueue3Data': {'test': true}});
     //await browser.storage.local.set({'Ged': queueData});
     setTimeout(() => {
   console.log("Ged we waited 2s to run this code, oh boy wowwoowee!");
 }, 2000);
     await browser.storage.local.set({'Tommy2-1': queueData});
-    await browser.storage.local.set({'dwnData': queueData});
 
-    /*
-    await browser.storage.local.set({'Tommy2': false});
-    await browser.storage.local.set({'Tommy2-1': queueData});
-    await browser.storage.local.set({'Tommy2-2': false});
-    */
-    await browser.storage.local.set({'arrQueue3Order': queueOrder});
+    await browser.storage.local.set({'queueOrder': queueOrder});
     console.log("Ged 6-13-2 queueOrder", queueOrder)
+    */
+   await saveQueues();
 
 }
 
@@ -67,8 +65,33 @@ export async function enqueue(arrData){
 // Get the current queue and order from storage, or init vars in not present
 async function getCurrent(){
     const keys = await browser.storage.local.getKeys();
-    queueOrder = keys.includes('arrQueue3Order') ? await browser.storage.local.get('arrQueueOrder') : [];
-    queueData = keys.includes('objQueue3Data') ? await browser.storage.local.get('objQueueData') : {};
+    console.log("Ged 2-1 current queueOrder, queueData", queueOrder, queueData)
+    if (!queueOrder) {
+        queueOrder = keys.includes('arrQueue3Order') ? await browser.storage.local.get('queueData') : [];
+    }
+    if (!queueData) {
+        queueData = keys.includes('objQueue3Data') ? await browser.storage.local.get('queueOrder') : {};
+    }
+}
+
+// Save cached queues to storage
+async function saveQueues(){
+    console.log("Ged 6-13 queueData", queueData)
+    try {
+    const value = {}
+    value['test1'] = 1
+    value['test2'] = true
+    await browser.storage.local.set({'test': value})
+    /*
+    await browser.storage.local.set({'queueData': queueData});
+    await browser.storage.local.set({'queueOrder': queueOrder});
+    */
+    console.log("Ged 6-13-2 queueOrder", queueOrder)
+    }
+    catch (error){
+        console.error('Ged 6-13-21 error', error)
+    }
+
 }
 
 //#endregion
