@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "XML4Plex",
-  "version": "0.0.4",
-  "description": "Show XML for a shared server",
+  "version": "0.0.7",
+  "description": "Show XML for a shared Plex Media Server",
   "content_scripts": [
     {
       "matches": ["https://app.plex.tv/*"],
-      "js": ["contentScript.js"]
+      "js": ["contents/contentScript.js"]
     }
   ],
   "web_accessible_resources": [
@@ -26,6 +26,7 @@
   "permissions" : [
     "tabs",
     "downloads",
+    "downloads.ui",
     "activeTab",
     "storage",
     "cookies"
@@ -34,7 +35,7 @@
     "64": "assets/xml.png"
   },
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "background/background.js",
     "type": "module"
   }
 }

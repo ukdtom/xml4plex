@@ -1,25 +1,46 @@
 "use strict";
 
+//(async () => {await browser.storage.local.clear()})();  // Clear all storage
+
 const validTypes = ["movie", "episode"];
-var blocklist = []; // Avoid multiple calls
 var user = {};      // Plex user
 var header = {};
 var mediaType;
 var SharedServers = {}; // Shared servers
 var modalObserver;
 var pageType;
+const manifest = chrome.runtime.getManifest();
 
+
+//#region Event Listners and handlers
+
+// Requests allowed
+const validRequests = ['gotMedia'];
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request["event"] == "gotMedia"){
-        gotMedia(request);
+    if (sender.id === chrome.runtime.id && validRequests.includes(request.event)){  // Only accept if it came from us and is a valid request
+        handleListener(request).then(sendResponse);
+        return true; // return true to indicate you want to send a response asynchronously
+    } else {
+        console.error("Ged 3-3 unauthorized request", request.event)
     }
 });
 
-class queueStatus {
-    static stopped = "Stopped";
-    static running = "Running"
+// Handle events
+async function handleListener(request){
+    let result = null;
+    const { event, prefs } = request;
+    switch (event) {
+        case 'gotMedia':
+            gotMedia(request);
+            break;
+        default:
+            break;
+    }
+    return result;
 }
+
+//#endregion
 
 main();
 
@@ -30,7 +51,6 @@ async function main(){
     }
     header = await setHeader();    //Set the web requests header
     getSharedServers();
-    await browser.storage.local.set({"queueStatus": {"status": "Stopped"}});
 }
 
 //#region Internal functions
@@ -227,6 +247,7 @@ async function getAddressAndInfo(srvInfo, myHeader){
             }
         }
     }
+    chrome.runtime.sendMessage({ event: 'sharedServers', prefs: SharedServers});
 }
 
 // Fetch with a default timeout with a default of 8000 millisec
@@ -441,16 +462,17 @@ async function createFileSelect(files, srvAddress){
     let fileSelectModalFooterContentsBtnDwn = document.createElement("button");
     fileSelectModalFooterContentsBtnDwn.type = "button";
     fileSelectModalFooterContentsBtnDwn.innerText = "Download";
-    fileSelectModalFooterContentsBtnDwn.onclick = function() { downloadItems(files, srvAddress); };
+    fileSelectModalFooterContentsBtnDwn.onclick = function() { downloadItems(files); };
     fileSelectModalFooterContents.appendChild(fileSelectModalFooterContentsBtnDwn);
     fileSelectModalFooter.appendChild(fileSelectModalFooterContents);
     fileSelectModalContent.appendChild(fileSelectModalFooter);
 }
 
-// Initiate the download
-async function downloadItems(files, srvAddress){
+// Initiate the download selection view, and send an array of selected items to the queue
+async function downloadItems(files){
     const srvID = getIDFromURL(document.URL);
     let itemsDwn = [];
+    let arrItemsDwn = [];   // Used by the Queue
     for (let i = 0; i < files[0]["streams"].length; i++){
         let el = document.getElementById(`item${i.toString()}`);
         if (el.checked){
@@ -458,35 +480,9 @@ async function downloadItems(files, srvAddress){
         }
     }
     fileSelectModalClose();
-    if (itemsDwn.length > 0){
-        //await browser.storage.local.clear();
-        let arrQueue = await getArrQueue();
-        console.log("Ged 86-3 Start arrQueue", arrQueue)
-        // Make the prefs
-        let prefs = {};
-        prefs["saveAs"] = false;
-        let dwnHeader = [];
-        let entry = {};
-        const keys = Object.keys(header);
-        for (let i = 0; i < keys.length; i++) {
-            const key = keys[i];
-            if (key != 'Accept'){
-                let entry = {};
-                entry["name"] = key;
-                entry["value"] = header[key];
-                dwnHeader.push(entry);
-            }
-        }
-        prefs["headers"] = dwnHeader;
-        let token = {};
-        token["name"] = "X-Plex-Token";
-        token["value"] = SharedServers[srvID]["accessToken"];
-        prefs["headers"].push(token);
+    if (itemsDwn.length > 0){   // User selected items to download
         for (let i = 0; i < itemsDwn.length; i++){
             let stream = JSON.parse(JSON.stringify(files[0]["streams"][itemsDwn[i]]));
-            prefs["url"] = `${srvAddress}${stream["key"]}?download=1`;
-            prefs["filename"] = `${stream["fileDir"]}/${stream["filename"]}`;
-            chrome.runtime.sendMessage({ event: 'download', prefs: prefs });
             let queueItem = {};
             queueItem["title"] = files[0]["title"];
             queueItem["type"] = files[0]["type"];
@@ -513,31 +509,12 @@ async function downloadItems(files, srvAddress){
                     queueItem["summary"] = files[0]["summary"];
                 }
             }
-            if (queueItem["key"].includes("/library/parts/")){
-                // Remove the /library/parts/ from the key and get the first 2 parts of the key to create an id
-                let arrID = queueItem["key"].slice(queueItem["key"].indexOf("/library/parts/")+15).split("/");
-                queueItem["id"] = `${arrID[0]}-${arrID[1]}`;
-            } else {
-                let arrID = queueItem["key"].split("/");
-                queueItem["id"] = `${queueItem["srvID"]}-${arrID[3]}`;
-            }
-            arrQueue.push(queueItem);
+            arrItemsDwn.push(queueItem);
         }
-        await setArrQueue(arrQueue);
+        await chrome.runtime.sendMessage({ event: 'enqueue', prefs: arrItemsDwn});
     } else {
         alert("Nothing selected for download")
     }
-}
-
-// Get a list of items in the download queue
-async function getArrQueue(){
-    let arrQueue = await browser.storage.local.get(["arrQueue"]);
-    return arrQueue["arrQueue"] || [];
-}
-
-// Set a list of items in the download queue
-async function setArrQueue(arrQueue){
-    await browser.storage.local.set({"arrQueue": arrQueue});
 }
 
 async function download(srvAddress, key){
@@ -545,9 +522,9 @@ async function download(srvAddress, key){
     createFileSelect(files, srvAddress);
 }
 
-//Send list of shared servers to the backend as well as the product name
+//Send list of shared servers to the backend
 async function setGlobalVars() {
-    const prefs = {"servers": Object.keys(SharedServers), "product": header["X-Plex-Product"]};
+    const prefs = {"servers": Object.keys(SharedServers)};
     return new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({ event: 'setGlobalVars', prefs: prefs }, senderResponse => {
             if (senderResponse){
@@ -576,7 +553,6 @@ async function getPlexCookie(domain, name, callback) {
 //Set the header used for web requests, but don't set the token
 async function setHeader(){
     if (!header.hasOwnProperty("Accept")){  // We need to set the header
-        let manifest = chrome.runtime.getManifest();
         header["Accept"] = "application/json";
         header["X-Plex-Product"] = manifest["name"];
         header["X-Plex-Version"] = manifest["version"];
@@ -584,19 +560,20 @@ async function setHeader(){
             header["X-Plex-Client-Identifier"] = await getStoredKey("cID");
         } catch {   // Not found, so we need to set one
             let cID = `${(user["thumb"]).split("=")[1]}${user["uuid"]}`;
-            await chrome.storage.sync.set(    // Store the new cID
+            await chrome.storage.local.set(    // Store the new cID
                 { cID: cID }
             );
             header["X-Plex-Client-Identifier"] = cID;
         }
     }
+    chrome.storage.local.set({header: header})
     return header;
 }
 
 // Get stored value from synced storage
 const getStoredKey = async (key) => {
     return new Promise((resolve, reject) => {
-      chrome.storage.sync.get([key], function (result) {
+      chrome.storage.local.get([key], function (result) {
         if (result[key] === undefined) {
             reject(false);
         } else {

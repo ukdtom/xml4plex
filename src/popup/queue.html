@@ -45,10 +45,14 @@
         <div class="offscreen">Last change: <span aria-live="polite" id="ss_live_region"></span></div>
       </div>
       <div id="queue" class="queue">
-        <p>Hello Queue</p>
-        <div id = "queueStatus">
-          <p>Queue Status: </p>
+        <div id="queueStatus" class='queueStatus'>
         </div>
+        <div id="divBtn" class="divBtn">
+          <button type="button" id="btnQueue" class="toolbar-item" tabindex="-1" aria-disabled="true">
+            Start Queue
+          </button>
+        </div>
+        <div id="currentDwn" class="currentDwn"></div>
       </div>
     </body>
     <script type="module" src="queue.js"></script>

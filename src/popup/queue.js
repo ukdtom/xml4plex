@@ -21,18 +21,130 @@ var aria = aria || {};
 
 // #region xml4Plex
 
-var arrQueue = [];
-let elList = document.getElementById('ss_imp_list');
+// #region Message listner and handler
 
-// Get a list of items in the download queue
-async function getArrQueue(){
-    let arrQueue = await browser.storage.local.get(["arrQueue"]);
-    console.log('Ged 286-0 getArrQueue', arrQueue["arrQueue"] || [])
-    return arrQueue["arrQueue"] || [];
+// Requests allowed
+const validRequests = ['downloadStatus', 'update'];
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (sender.id === chrome.runtime.id && validRequests.includes(request.event)){
+        handleListener(request).then(sendResponse);
+        return true; // return true to indicate you want to send a response asynchronously
+    } else {
+        console.error("Ged 3-3 unauthorized request", request.event)
+    }
+});
+
+// Handle events
+async function handleListener(request){
+    let result = null;
+    const { event, prefs } = request;
+    switch (event) {
+        case 'downloadStatus':
+            result = setdownloadStatus(prefs);
+            break;
+        case 'update':
+            update(prefs);
+            break;
+        default:
+            break;
+    }
+    return result;
+}
+
+// #endregion
+
+let queue;
+
+var arrQueue = [];
+var elList = document.getElementById('ss_imp_list');
+var bQueueRunning;
+const manifest = chrome.runtime.getManifest();
+
+/*
+* Updates the Queue window with queue status
+* Set the txt and enable/disable for queue button
+* Set the txt for what is currently been downloaded
+* Update the queue list
+*/
+async function update(queueNew){
+    queue = queueNew;       // Update cache with new info
+    setQueueStatus(queue['queueRunning']);  // Show if queue is running or not
+    setQueueButton(queue['queueRunning'], (queue['queueOrder'].length > 0));  // Set txt on queue start/stop button and enable/disable if needed
+    setListBox();    // Update the listbox from the queue
+}
+
+function setListBox() { // Update the listbox from the queue
+    // Lets start by clearing the listbox
+    const elList = document.getElementById('ss_imp_list');
+    const selID = elList.ariaActiveDescendantElement ? elList.ariaActiveDescendantElement['id'] : null;   // Selected element
+    const el = document.querySelectorAll('li');
+    el.forEach(function(node) {
+        let id = node.id;
+        let item = document.getElementById(id);
+        if (item){
+            item.remove();
+        }
+    });
+    if (queue['queueOrder'].length > 0) {    //Queue has contents, so lets show it
+        for (let idx in queue['queueOrder']){
+            try {
+            const listItem = document.createElement('li');
+            listItem.setAttribute('role', 'option');
+            listItem.setAttribute('id', queue['queueOrder'][idx]);
+            listItem.textContent = queue['queueData'][queue['queueOrder'][idx]]["displayTitle"];
+            const span = document.createElement('span');
+            span.setAttribute('class', 'checkmark');
+            span.setAttribute('aria-hidden', 'true');
+            listItem.appendChild(span);
+            elList.appendChild(listItem);
+            } catch(e) {
+                continue;
+            }
+        }
+        if (selID) { //Something was selected before
+            showInfo(selID);    //Show selected items info
+            try {
+            elList.setAttribute('aria-activedescendant', selID);    //Select item again
+            elList.activeDescendant = selID;
+            const el = document.getElementById(selID);
+            el.classList.add('focused');
+            el.setAttribute('aria-selected', 'true');
+            el.setAttribute('aria-hidden', 'false');
+            } catch(e) {}
+        } else {
+            showInfo('click');
+        }
+    } else {
+        showInfo(null);
+    }
+}
+
+function setQueueButton(status, QueuePresent) { // Set txt on queue start/stop button and enable/disable if needed
+    const btnQueue = document.getElementById('btnQueue');
+    const btnTxt = !status? 'Start Queue': 'Stop Queue';
+    btnQueue.innerText = btnTxt;
+    btnQueue.setAttribute('aria-disabled', !QueuePresent.toString());
+    btnQueue.disabled = !QueuePresent;
+}
+
+function setQueueStatus(status) {   // Show if queue is running or not
+    const queueStatus = document.getElementById('queueStatus');
+    const htmlTxt = status? `<b>Queue:</b> Running`: "<b>Queue:</b> Stopped";
+    queueStatus.innerHTML = htmlTxt;
+}
+
+// Show what is currently been downloaded
+function setdownloadStatus(prefs){
+    const currentDwn = document.getElementById('currentDwn');
+    currentDwn.innerHTML = prefs;
 }
 
 // Show info for the selected item
 async function showInfo(id){
+    if (!queue['queueData'].hasOwnProperty(id)) {   // Only show info if item still exists
+        id = 'click'
+    }
     let txt = '';
     let info = document.getElementById("info");
     switch (id){
@@ -43,12 +155,11 @@ async function showInfo(id){
             txt = 'Click on an item to show info';
             break;
         default:
-            const item = await getQueueByID(id);
+            const item = queue['queueData'][id];
             txt = `<b>Title:</b> ${item["displayTitle"]}<b>Type:</b> ${item["type"]}<b>Server:</b> ${item["srvID"]}<br><b>Key:</b> ${item["key"]}`;
-            if (item.hasOwnProperty("season")){
-                let se = `S${item["season"].toString().padStart(2, "0")}E${item["episode"].toString().padStart(2, "0")}`;
+            if (item['se']) {
                 txt = `<b>Show Title:</b> ${item["showTitle"]}<br>${txt}`;
-                txt += `<br><b>SeasonEpisode:</b> ${se}`;
+                txt += `<br><b>SeasonEpisode:</b> ${item["se"]}`;
             }
             if (["movie", "episode"].includes(item["type"])){
                 txt += `<br><b>Summary:</b> ${item["summary"]}`;
@@ -58,94 +169,86 @@ async function showInfo(id){
     info.innerHTML = txt;
 }
 
-/**
- * Populate the listbox with the download queue
- */
-async function populateQueue() {
-  //await browser.storage.local.set({"arrQueue": []});  // Reset/Delete the queue
-  arrQueue = await getArrQueue();
-  const listbox = new aria.Listbox(elList);
-  if (arrQueue.length > 0){
-    arrQueue.forEach(function (arrayItem) {
-      const listItem = document.createElement('li');
-      listItem.setAttribute('role', 'option');
-      listItem.setAttribute('id', `ss_elem_${arrayItem["id"]}`);
-      listItem.textContent = arrayItem["displayTitle"];
-      const span = document.createElement('span');
-      span.setAttribute('class', 'checkmark');
-      span.setAttribute('aria-hidden', 'true');
-      listItem.appendChild(span);
-      elList.appendChild(listItem);
-    });
-
-    // Show info for the first item in the queue
-   showInfo('click');
-    addClearButton();
-  } else {
-    showInfo(null)
-  }
-  elList.focus();
-  if (listbox.activeDescendant){
-    const id = listbox.activeDescendant.slice(8);
-    showInfo(id)
-  }
-  await browser.storage.local.set({"queueStatus": "Stopped"});
-  console.log("Ged 1 **** CHECK THIS ****")
-  const queueStatus = document.getElementById('queueStatus');
-  const queueRunningStatus = await browser.storage.local.get("queueStatus");
-  queueStatus.innerHTML = `<b>Queue Status:</b> ${queueRunningStatus["queueStatus"]}`;
+async function populateQueue() {    // Populate the listbox with the download queue
+    queue = await chrome.runtime.sendMessage({ event: 'getQueue', prefs: null });   // Get the queue and cache it as well
+    await update(queue);    //Update the GUI
+    addButtons();
+    // Set focus on the listbox
+    elList.focus();
 }
 
-async function getQueueByID(id){
-    return arrQueue.filter(record => {
-        return record.id === id;
-    })[0]
+// Toogle queue status
+async function toggleQueue(){
+    console.log("Ged 13 TODO *******************************")
+    //if (bQueueRunning){
+    /*
+    if (queue['queueRunning']){
+        alert('Existing download will continue until done');
+    }
+        */
+    chrome.runtime.sendMessage({ event: 'toggleQueue' });
 }
 
-function addClearButton(){
+async function addButtons(){
+    // Queue Clear All botton
     let clearButton = document.getElementById('ex1-clear')
     clearButton.addEventListener("click", clearAll);
-    if (arrQueue.length > 0){
+    if (queue['queueOrder'].length > 0){
         clearButton.setAttribute('aria-disabled', 'false');
     } else {
         clearButton.setAttribute('aria-disabled', 'true');
     }
+    // Queue button
+    const btnQueue = document.getElementById('btnQueue');
+    btnQueue.addEventListener("click", toggleQueue);
 }
 
 async function clearAll(){
-    arrQueue = [];
-    await browser.storage.local.set({"arrQueue": arrQueue});
-    const listbox = new aria.Listbox(elList);
-    const el = document.querySelectorAll('li');
-    el.forEach(function(node) {
-        let id = node.id;
-        let item = document.getElementById(id);
-        if (item){
-            item.remove();
-        }
-    });
-    listbox.clearActiveDescendant();
+    await chrome.runtime.sendMessage({ event: 'deleteQueue', prefs: null });
 }
 
-async function saveListBox(){
-    let newQueue = [];
-    const listbox = new aria.Listbox(document.getElementById('ss_imp_list'));
-    const el = document.querySelectorAll('li');
-    if (el.length > 0){
-        el.forEach(function(node) {
-            let id = node.id.slice(8);
-            let result = arrQueue.filter(arrQueue => {
-                return arrQueue.id === id;
-            })
-            newQueue.push(result[0]);
-        });
-        arrQueue = newQueue.slice();
-    } else {
-        arrQueue = [];
+async function arraymove(arr, fromIndex, toIndex) {
+    var element = arr[fromIndex];
+    arr.splice(fromIndex, 1);
+    arr.splice(toIndex, 0, element);
+}
+
+async function saveListBox(clearInfo){
+    let id, idx;
+    switch (clearInfo.action) {
+        case 'delete':
+            const itemsToDelete = [];   // tmp array to send to the backend
+            for (let idx in clearInfo['id']) {
+                id = clearInfo['id'][idx].id;
+                itemsToDelete.push(id);
+                // Now local cache
+                const index = queue['queueOrder'].indexOf(id);
+                if (index > -1) { // only splice array when item is found
+                    queue['queueOrder'].splice(index, 1); // 2nd parameter means remove one item only
+                }
+                // Remove from data
+                delete queue['queueData'][id];
+            }
+            chrome.runtime.sendMessage({ event: 'deleteQueueItem', prefs: itemsToDelete })
+            break;
+        case 'down':
+            id = clearInfo['id'][0].id;
+            idx = queue['queueOrder'].indexOf(id);
+            if (idx < queue['queueOrder'].length){  // Okay to move down
+                await arraymove(queue['queueOrder'], idx, idx+1);
+                await chrome.runtime.sendMessage({ event: 'newOrder', prefs: queue['queueOrder'] });
+            }
+            break;
+        case 'up':
+            id = clearInfo['id'][0].id;
+            idx = queue['queueOrder'].indexOf(id);
+            if (idx > 0){  // Okay to move up
+                await arraymove(queue['queueOrder'], idx, idx-1);
+                await chrome.runtime.sendMessage({ event: 'newOrder', prefs: queue['queueOrder'] });
+            }
+            break;
     }
-    await await browser.storage.local.set({"arrQueue": arrQueue});
 }
-
 
 // #endregion
 
@@ -196,7 +299,9 @@ aria.Listbox = class Listbox {
   setupFocus() {
     if (this.activeDescendant) {
       const listitem = document.getElementById(this.activeDescendant);
-      listitem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (listitem){    //Injected xml4Plex
+        listitem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
     } else {
       this.focusFirstItem();
     }
@@ -375,8 +480,7 @@ aria.Listbox = class Listbox {
     }
     // Injected xml4Plex Start
     if (this.activeDescendant){
-        let id = this.activeDescendant.slice(8);
-        showInfo(id);
+        showInfo(this.activeDescendant);
     }
     // Injected xml4Plex End
   }
@@ -478,8 +582,9 @@ aria.Listbox = class Listbox {
     }
 
     // Injected xml4Plex Start
-    let id = evt.target.id.slice(8);
-    showInfo(id);
+    //let id = evt.target.id.slice(8);
+    //showInfo(id);
+    showInfo(evt.target.id);
     // Injected xml4Plex End
 
     this.focusItem(evt.target);
@@ -730,7 +835,7 @@ aria.Listbox = class Listbox {
     );
 
     this.handleItemChange('removed', itemsToDelete);
-    saveListBox();
+    saveListBox({action: 'delete', id: itemsToDelete});  // `Injected xml4Plex`
     return itemsToDelete;
   }
 
@@ -761,7 +866,7 @@ aria.Listbox = class Listbox {
     }
 
     this.checkUpDownButtons();
-    saveListBox();
+    saveListBox({action: 'up', id: [currentItem]});  // `Injected xml4Plex`
   }
 
   /**
@@ -783,7 +888,7 @@ aria.Listbox = class Listbox {
     }
 
     this.checkUpDownButtons();
-    saveListBox();
+    saveListBox({action: 'down', id: [currentItem]});  // `Injected xml4Plex`
   }
 
   /**
@@ -997,14 +1102,15 @@ var aria = aria || {};
  * @description Initialize the listbox examples once the page has loaded
  */
 
-window.addEventListener('load', function () {
+
+window.addEventListener('DOMContentLoaded', function () {
   // This onload handle initializes two examples. Only initialize example if the example
   // can be found in the dom.
-  populateQueue() // Injected xml4Plex
   if (document.getElementById('ss_imp_list')) {
     var ex1ImportantListbox = new aria.Listbox(
       document.getElementById('ss_imp_list')
     );
+    populateQueue() // Injected xml4Plex
     var ex1UnimportantListbox = new aria.Listbox(
       document.getElementById('ss_unimp_list')
     );
