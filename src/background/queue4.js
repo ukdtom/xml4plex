@@ -66,6 +66,13 @@ export class queue4 {
         await this.#saveQueue();
     }
 
+    async deleteQueueItem(item) {
+        delete this.queueData[item[0]]; // Remove metadata
+        const idx = this.queueOrder.indexOf(item[0]);
+        this.queueOrder.splice(idx, 1);
+        await this.#saveQueue();
+    }
+
     async toggleQueue() {   // Toggle queueRunning
         this.queueRunning = !this.queueRunning;
         await this.#saveQueue();
@@ -108,7 +115,7 @@ export class queue4 {
                         this.queueOrder.splice(idx, 1); // Remove entry from the order array
                         delete this.queueData[rec['id']];    // Remove record from the metadata JSON
                         await chrome.downloads.download(prefs);   // Start the download of a subtitle
-                        await delay(2000);  // Wait 1000 msec due to race condition
+                        await delay(2000);  // Wait 2000 msec due to race condition
                         await this.#saveQueue();  // Update storage
                     } else {    // Media download
                         this.activeID = rec['id'];
@@ -161,6 +168,7 @@ export class queue4 {
     onDownloadComplete(itemId) {    // Event listen for the download to complete
     return new Promise(resolve => {
         chrome.downloads.onChanged.addListener(function onChanged({id, state}) {
+            {async () => await delay(1000)};  // Wait 1000 msec due to race condition
             if (id === itemId && state && state.current !== 'in_progress') {
                 chrome.downloads.onChanged.removeListener(onChanged);
                 resolve(state.current === 'complete');

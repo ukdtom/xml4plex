@@ -72,7 +72,7 @@ async function handleListener(request){
             result = queue45;
             break;
         case 'deleteQueueItem':
-            deleteQueueItem(prefs);
+            await queue45.deleteQueueItem(prefs);
             break;
         case 'newOrder':
             queue45.newOrder(prefs);
