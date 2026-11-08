@@ -435,6 +435,7 @@ async function createFileSelect(files, srvAddress){
     fileSelectModalBody.innerHTML = `<p>Select items to dowwnload</p><p>Note: when downloading a subtitle, remove the .htm extention when saving</p>`;
     let fileSelectModalBodyMedia = document.createElement("div");
     if (files[0]["streams"].length > -1){    // We got some files
+        console.log("Ged 66 files", files)
         for (let i = 0; i < files[0]["streams"].length; i++){    // Add items to the modal selection
             let item = document.createElement('div');
             let itemCB = document.createElement("input");

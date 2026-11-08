@@ -1,5 +1,5 @@
 "use strict";
-import {encryptValue, decryptValue} from './crypto.js';
+import {encryptValue} from '../shared/crypto.js';
 import { queue4 } from './queue4.js';
 
 // Init the queue

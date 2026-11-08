@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "XML4Plex",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Show XML for a shared Plex Media Server",
   "content_scripts": [
     {
@@ -23,6 +23,7 @@
   "action": {
     "default_popup": "popup/queue.html"
   },
+  "options_page": "options/options.html",
   "permissions" : [
     "tabs",
     "downloads",
