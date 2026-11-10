@@ -14,11 +14,11 @@
       "resources": [
         "/assets/xml.png"
       ],
-      "matches": ["<all_urls>"]
+      "matches": ["https://app.plex.tv/*"]
     }
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://app.plex.tv/*"
   ],
   "action": {
     "default_popup": "popup/queue.html"
@@ -27,8 +27,6 @@
   "permissions" : [
     "tabs",
     "downloads",
-    "downloads.ui",
-    "activeTab",
     "storage",
     "cookies"
   ],

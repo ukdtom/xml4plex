@@ -34,6 +34,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // URL Update listner
 chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+    console.log("Ged 3-3 onUpdated", changeInfo.url);
     if (changeInfo.url) {
       // Check if it came from app.plex.tv and on a detail page
       if (changeInfo.url.startsWith("https://app.plex.tv/desktop/#!/server/") && changeInfo.url.indexOf("details?key=")>0){
@@ -97,9 +98,12 @@ async function setServerInfo(){
 
 // Get Media prefs
 async function getMedia(prefs){
+    console.log("Ged 7-3 getMedia prefs", prefs);
     if (prefs["changeInfo"]["url"].indexOf("key=%2Flibrary%2Fmetadata%2F") > 0){    //Only react when watching a media
+        console.log("Ged 7-4 getMedia valid URL and servers", prefs["changeInfo"]["url"], servers);
         if (servers.includes(getIDFromURL(prefs["changeInfo"]["url"]))){    //Only react if this is a shared server
             const message = {"event": "gotMedia", "url": prefs["changeInfo"]["url"]};
+            console.log("Ged 7-9 getMedia sending message to content script", message);
             chrome.tabs.sendMessage(prefs["tabId"], message);
         }
     }

@@ -22,10 +22,6 @@ export class queue4 {
         this.continue = false;
     }
 
-    getQueueLength() {  // Get the length of the queue
-        return this.queueOrder.length;
-    }
-
     getQueue() {    // Return the queue
         return this;
     }

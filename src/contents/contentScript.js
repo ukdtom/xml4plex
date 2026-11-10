@@ -9,7 +9,8 @@ var mediaType;
 var SharedServers = {}; // Shared servers
 var modalObserver;
 var pageType;
-const manifest = chrome.runtime.getManifest();
+const manifest = chrome.runtime.getManifest();  // Get the manifest info
+let elTitle = null;
 
 
 //#region Event Listners and handlers
@@ -24,6 +25,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else {
         console.error("Ged 3-3 unauthorized request", request.event)
     }
+});
+
+window.addEventListener("load", function () {
+    console.log("Ged 1-1 Window Loaded", document.URL);
+  //elTitle = document.querySelector('[data-testid="preplay-more"]');
+    const el1 = document.querySelector('[data-testid="metadata-title"]');
+    console.log(el1);
+  elTitle = document.querySelector('h1');
+  console.log("Ged 1-3 elTitle", elTitle.parentElement);
+  //injectIcons();
+
+  //<h1 class="ineka90 ineka9j ineka96 ineka9n _1v25wbq1g _1v25wbq1c _1v25wbqlc _1v25wbql9" data-testid="metadata-title">#Skyking</h1>
 });
 
 // Handle events
@@ -46,6 +59,7 @@ main();
 
 // Main entry point
 async function main(){
+    //injectIcons();
     if (!user.hasOwnProperty("id")){    //Need to get user info from the cookie
         user = await getPlexCookie("https://app.plex.tv", "plex_tv_auth");
     }
@@ -54,6 +68,32 @@ async function main(){
 }
 
 //#region Internal functions
+
+// Inject icons into media screens
+async function injectIcons(elMore){
+        console.log("Ged 4-3 valid URL, so let's inject icons", document.URL);
+        //const elTitle = document.querySelector('[data-testid="preplay-more"]');
+        /*
+        if (!elMore){
+            console.log("Ged 4-3 elTitle", elMore);
+            const buttonXML = document.createElement('button');
+            buttonXML.id = "xml4Plex-xml";
+            buttonXML.setAttribute("role", "button");
+            buttonXML.setAttribute("type", "button");
+            buttonXML.setAttribute("data-testid", "xml4Plex-xml");
+            elMore.after(buttonXML);
+            buttonXML.append("Hello! I am an h3");
+        }
+        */
+
+        elMore.insertAdjacentHTML('afterend', '<h2>Lawal</h2>');
+
+/*
+         <button id="id-277"  data-testid="preplay-more" role="button" type="button"><div aria-hidden="true" class="_76v8d6p"><div aria-hidden="true" class="_1oqmfda1 _1oqmfda3 _1oqmfda6"></div></div><div aria-hidden="false" class="_76v8d6q"><div class="_1h4p3k00 _1v25wbq8 _1v25wbq1w _1v25wbqg _1v25wbq1g _1v25wbq1c _1v25wbq14 _1v25wbq3g _1v25wbq2g"><svg aria-hidden="true" class="rkbrtb0 rkbrtb1 rkbrtb3 _1v25wbq5k" fill="currentColor" height="48" viewBox="0 0 48 48" width="48" xmlns="http://www.w3.org/2000/svg"><path d="M12 27C13.6569 27 15 25.6569 15 24C15 22.3431 13.6569 21 12 21C10.3431 21 9 22.3431 9 24C9 25.6569 10.3431 27 12 27Z" fill="currentColor"></path><path d="M24 27C25.6569 27 27 25.6569 27 24C27 22.3431 25.6569 21 24 21C22.3431 ２１ ２１ ２２.３４３１ ２１ 
+
+*/
+
+}
 
 // Returns a server machine ID from an url
 function getIDFromURL(url){
@@ -150,7 +190,9 @@ function watchForModal(target){
 
 //gotMedia event triggered
 async function gotMedia(request){
+    console.log("Ged 2-1 request", request);
     if (request["url"] === document.URL){   //Make sure we still is on the right page
+        //injectIcons();
         const id = getIDFromURL(document.URL);    //Get the servers MachineID
         if (!SharedServers[id].hasOwnProperty("address")){
             alert("No address found yet, please try again in 5 seconds")
@@ -182,6 +224,13 @@ async function gotMedia(request){
                 request = null;
             }
         }
+        console.log("Ged 2-3 gotMedia called with url", request["url"], "and pageType", pageType);
+        window.addEventListener("load", (event) => {    //Wait for the window to be fully loaded before injecting the icons
+            console.log("page is fully loaded");
+            let elMore =  document.querySelectorAll('[data-testid="preplay-more"]');
+            console.log("Ged 2-4 gotMedia el", elMore);
+        });
+
     }
 }
 
