@@ -1,5 +1,5 @@
 "use strict";
-import {encryptValue, decryptValue} from './crypto.js';
+import {encryptValue, decryptValue} from '../shared/crypto.js';
 import { queue4 } from './queue4.js';
 
 // Init the queue
@@ -97,7 +97,7 @@ async function setServerInfo(){
 
 // Get Media prefs
 async function getMedia(prefs){
-    if (prefs["changeInfo"]["url"].indexOf("key=%2Flibrary%2Fmetadata%2F") > 0){    //Only react when watching a media
+    if (prefs["tab"]["url"].indexOf("key=%2Flibrary%2Fmetadata%2F") > 0){    //Only react when watching a media
         if (servers.includes(getIDFromURL(prefs["changeInfo"]["url"]))){    //Only react if this is a shared server
             const message = {"event": "gotMedia", "url": prefs["changeInfo"]["url"]};
             chrome.tabs.sendMessage(prefs["tabId"], message);

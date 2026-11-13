@@ -1,10 +1,12 @@
 /*********************************************
- * This file is the Queue Class
+ * This file is the bacgound Queue Class
  *********************************************/
 "use strict";
-import { decryptValue } from './crypto.js';
+import { decryptValue } from '../shared/crypto.js';
+import { itemMovie, itemSub, itemEpisode} from '../shared/classes.js';
 
-const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
+//const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
+
 let active, activeID = null;    // Sadly needed due to a race condition when downloading subs
 
 //#region Exported class
@@ -18,11 +20,6 @@ export class queue4 {
         this.active = null; // Id from the chrome download queue of the item currently downloading
         this.activeID = null;   // ID from this queue that is currently been downloaded
         this.continue = false;
-
-    }
-
-    getQueueLength() {  // Get the length of the queue
-        return this.queueOrder.length;
     }
 
     getQueue() {    // Return the queue
@@ -189,7 +186,7 @@ const delay = millis => new Promise((resolve, reject) => {
 //#endregion
 
 //#region Internal classes
-class itemMovie {
+class itemMovie1 {
     constructor() {
         this.type = 'movie';
         this.title = null;
@@ -216,7 +213,7 @@ class itemMovie {
     }
 }
 
-class itemSub {
+class itemSub1 {
     constructor() {
         this.type = 'subtitle';
         this.title = null;
@@ -248,7 +245,7 @@ class itemSub {
     }
 }
 
-class itemEpisode {
+class itemEpisode1 {
     constructor() {
         this.type = 'episode';
         this.title = null;

@@ -25,11 +25,16 @@ var aria = aria || {};
 
 // Requests allowed
 const validRequests = ['downloadStatus', 'update'];
+const returnVal = [];   //Requests where we want to return something from
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (sender.id === chrome.runtime.id && validRequests.includes(request.event)){
+    if (sender.id === chrome.runtime.id){ // Only accept if it came from us
+      if (validRequests.includes(request.event)){ // Only accept if it is a valid request
         handleListener(request).then(sendResponse);
-        return true; // return true to indicate you want to send a response asynchronously
+        if (returnVal.includes(request.event)){
+            return true; // return true to indicate you want to send a response asynchronously
+        }
+      }
     } else {
         console.error("Ged 3-3 unauthorized request", request.event)
     }
@@ -179,13 +184,6 @@ async function populateQueue() {    // Populate the listbox with the download qu
 
 // Toogle queue status
 async function toggleQueue(){
-    console.log("Ged 13 TODO *******************************")
-    //if (bQueueRunning){
-    /*
-    if (queue['queueRunning']){
-        alert('Existing download will continue until done');
-    }
-        */
     chrome.runtime.sendMessage({ event: 'toggleQueue' });
 }
 

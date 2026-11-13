@@ -9,7 +9,8 @@ var mediaType;
 var SharedServers = {}; // Shared servers
 var modalObserver;
 var pageType;
-const manifest = chrome.runtime.getManifest();
+const manifest = chrome.runtime.getManifest();  // Get the manifest info
+let elTitle = null;
 
 
 //#region Event Listners and handlers
@@ -80,109 +81,87 @@ const delay = millis => new Promise((resolve, reject) => {
   setTimeout(_ => resolve(), millis)
 });
 
-async function injectFooter(url){
-    const srvID = getIDFromURL(url);
-    const urlXML = `${SharedServers[srvID]["address"]}/library/metadata/${getKeyFromUrl(url)}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[srvID]["accessToken"]}`;
-    let modalContent = document.getElementsByClassName("modal-content");
-    if (modalContent.length > 0){
-        // Create modal footer, but if there already remove it first
-        const divModalFooterName = `${header["X-Plex-Product"]}ModalFooter`;
-        await delay(1000);   // Delay 1000 millesec to allow the modal to be populated coreectly
-        // If footer is not already present, then create it as well as the bottom div
-        let divModalFooter = document.getElementById(divModalFooterName);
-        if (!divModalFooter){
-            divModalFooter = document.createElement("div");
-            divModalFooter.id = `${header["X-Plex-Product"]}ModalFooter`;
-            divModalFooter.className = "modal-footer";
-            let divBottom = document.createElement("div");
-            divBottom.id = `${header["X-Plex-Product"]}divBottom`;
-            divBottom.className = "pull-left";
-            // XML button needed to get info for media
-            let aXML = document.createElement("a");
-            aXML.id = "aXML";
-            aXML.target = "_blank";
-            aXML.innerText = "View XML";
-            aXML.href = urlXML;
-            aXML.style.marginRight = "5px";
-            divBottom.appendChild(aXML);
-            // Add download button if we are allowed to download and have a Plex Pass
-            if (user["roles"].includes("plexpass") && SharedServers[srvID]["allowSync"]){
-                let dwnBotton = document.createElement("button");
-                dwnBotton.id = "dwnButton";
-                dwnBotton.innerText = "Download";
-                dwnBotton.onclick = function() {  download(SharedServers[srvID]["address"], getKeyFromUrl(url)); };
-                divBottom.appendChild(dwnBotton);
-            }
-            divModalFooter.appendChild(divBottom);
-        }
-        modalContent[0].appendChild(divModalFooter);
-    }
-}
-
-// Callback triggers when mutations are observed
-const injectCallback = (mutationList) => {
-    for (const mutation of mutationList) {
-        if (mutation.type === "attributes" && mutation.attributeName === "data-popper-placement"){
-            if (document.URL.startsWith("https://app.plex.tv/desktop/#!/server")){
-                let srvID = getIDFromURL(document.URL);
-                if (SharedServers.hasOwnProperty(srvID)){    //Only for shared servers
-                    let modalContent = document.getElementsByClassName("modal-content");
-                    if (modalContent.length > 0){ // We have the modal opened
-                        injectFooter(document.URL);
-                        (async () =>await delay(1000));   // Delay 500 millesec to allow the modal to be populated coreectly
-                        injectFooter(document.URL);
-                    }
-                }
-            }
-        }
-    }
-};
-
-function watchForModal(target){
-    // Options for the observer (which mutations to observe)
-    const config = { attributes: true, childList: true, subtree: true };
-    if (!modalObserver){    // Start the MutationObserver
-        modalObserver = new MutationObserver(injectCallback);
-    }
-    // Start observing the target node for configured mutations
-    modalObserver.observe(target, config);
-}
-
 //gotMedia event triggered
 async function gotMedia(request){
     if (request["url"] === document.URL){   //Make sure we still is on the right page
-        const id = getIDFromURL(document.URL);    //Get the servers MachineID
-        if (!SharedServers[id].hasOwnProperty("address")){
-            alert("No address found yet, please try again in 5 seconds")
-        } else {
-            const address = SharedServers[id]["address"];   //Get server address
-            let url = `${address}/library/metadata/${getKeyFromUrl()}`; // Get key from url
-            let myHeader = JSON.parse(JSON.stringify(header));
-            myHeader["X-Plex-Token"] =SharedServers[id]["accessToken"];
-            let jsonResponse;
-            try {
-                await fetch(url, {headers: myHeader}).then( async response => {
-                    if (response.ok){
-                        jsonResponse = await response.json();
-                    } else {
-                        console.error(`response returned was: ${response}`);
-                    }
-                });
-            } catch(error) {
-                alert(`JSON download failed for url: ${url} with the error: ${error}`);
-            }
-
-            try {
-                pageType = JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"]));
-            } catch {
-            }
-            if (validTypes.includes(JSON.parse(JSON.stringify(jsonResponse["MediaContainer"]["Metadata"][0]["type"])))){
-                watchForModal(document.body);
+        let el = null;
+        while (true) {  // Wait for the title element to be available
+            el = document.querySelector('[data-testid="metadata-title"]');
+            if (el) {
+                break;
             } else {
-                request = null;
+                // Wait for a short period before checking again
+                const waitTime = 100;
+                await new Promise(resolve => setTimeout(resolve, waitTime));
             }
         }
+        // Now we have the title element, inject the XML and download icons
+        const divXML4Plex = await getIconsDiv();
+        el.after(divXML4Plex);
     }
+}
+
+async function getIconsDiv(){   // Function to create and return a div containing the XML and download icons
+    const server = SharedServers[getIDFromURL(document.URL)];
+    const divXML4Plex = document.createElement("div");
+    divXML4Plex.id = `divXML4Plex`;
+    divXML4Plex.className = "divXML4Plex";
+    divXML4Plex.appendChild(await getXMLImg());
+    divXML4Plex.appendChild(await getJSONImg());
+    if (server["allowSync"] && server["plexPass"]){    // Only if we are allowed to download
+        divXML4Plex.appendChild(await getdownImg());
+    }
+    return divXML4Plex;
+}
+
+async function getdownImg() {   // Function to create and return the down arrow image element
+    const img = document.createElement("img");
+    img.src = chrome.runtime.getURL("assets/down-arrow.png");
+    img.alt = "Down Arrow";
+    img.style.width = "20px";
+    img.title = "Download";
+    img.onclick = function() {  clickDownIcon(); };
+    return img;
+}
+
+async function getJSONImg() {   // Function to create and return the JSON image element
+    const img = document.createElement("img");
+    img.src = chrome.runtime.getURL("assets/json.png");
+    img.alt = "JSON";
+    img.style.width = "20px";
+    img.title = "View JSON";
+    img.onclick = function() {  clickJSONIcon(); };
+    return img;
+}
+
+async function clickJSONIcon(){   // Function to handle the click event on the JSON icon
+    const srvID = getIDFromURL(document.URL);
+    const key = getKeyFromUrl(document.URL);
+    const urlJSON = `${SharedServers[srvID]["address"]}/library/metadata/${key}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[srvID]["accessToken"]}`;
+    const blob = await fetch(urlJSON, {headers: header}).then((res) => res.blob());
+    var _url = window.URL.createObjectURL(blob);
+    window.open(_url, "_blank").focus();
+}
+
+async function getXMLImg() {   // Function to create and return the XML image element
+    const srvID = getIDFromURL(document.URL);
+    const key = getKeyFromUrl(document.URL);
+    const urlXML = `${SharedServers[srvID]["address"]}/library/metadata/${key}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[srvID]["accessToken"]}`;
+    const aXML = document.createElement("a");
+    aXML.href = urlXML;
+    aXML.target = "_blank";
+    const img = document.createElement("img");
+    img.src = chrome.runtime.getURL("assets/xml.png");
+    img.alt = "XML";
+    img.style.width = "20px";
+    img.title = "View XML";
+    aXML.appendChild(img);
+    return aXML;
+}
+
+function clickDownIcon(){   // Function to handle the click event on the download icon
+    const srvID = getIDFromURL(document.URL);
+    download(SharedServers[srvID]["address"], getKeyFromUrl(document.URL));
 }
 
 // Start fetching shared servers in the backend
@@ -264,6 +243,32 @@ async function fetchWithTimeout(uri, options = {}) {
     return response;
 }
 
+function getMediaType(objJSON){ // Returns the media type from a JSON object, or null if not found
+    if (objJSON.hasOwnProperty("MediaContainer")){
+        if (objJSON["MediaContainer"].hasOwnProperty("Metadata")){
+            if (objJSON["MediaContainer"]["Metadata"].length > 0){
+                return objJSON["MediaContainer"]["Metadata"][0]["type"];
+            }
+        }
+    }
+    return null;
+}
+
+function getMediaResolution(objJSON){   // Returns the resolution of the media, or null if not found
+    if (objJSON.hasOwnProperty("MediaContainer")){
+        if (objJSON["MediaContainer"].hasOwnProperty("Metadata")){
+            if (objJSON["MediaContainer"]["Metadata"].length > 0){
+                if (objJSON["MediaContainer"]["Metadata"][0].hasOwnProperty("Media")){
+                    if (objJSON["MediaContainer"]["Metadata"][0]["Media"].length > 0){
+                        return objJSON["MediaContainer"]["Metadata"][0]["Media"][0]["videoResolution"];
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
 // Get a list of files/streams to present to the user
 async function getMediaList(srvAddress, key){
     const url = `${srvAddress}/library/metadata/${key}?checkFiles=1`;
@@ -280,6 +285,12 @@ async function getMediaList(srvAddress, key){
         });
     } catch(error) {
         alert(`Download failed: ${error}`);
+    }
+    const mediaType = getMediaType(jsonResponse);
+    const mediaResolution = getMediaResolution(jsonResponse);
+    if (!validTypes.includes(mediaType)){
+        alert(`Media type ${mediaType} is not supported for download`);
+        return null;
     }
     let files = {};
     let metadata = jsonResponse["MediaContainer"]["Metadata"];
@@ -329,6 +340,8 @@ async function getMediaList(srvAddress, key){
                                     }
                                 }
                                 filename = file["filename"];
+                                file["type"] = "media";
+                                file["mediaResolution"] = mediaResolution;
                                 files[i]["streams"].push(file);
                                 break;
                             case 3: // Subtitle
@@ -338,6 +351,8 @@ async function getMediaList(srvAddress, key){
                                     file["filename"] = `${filename.replace(/\.[^/.]+$/, "")}.${medias[x]["Part"][y]["Stream"][z]["languageTag"]}.${medias[x]["Part"][y]["Stream"][z]["format"]}.htm`;
                                     file["fileDir"] = filedir;
                                     file["language"] = medias[x]["Part"][y]["Stream"][z]["language"];
+                                    file["type"] = "subtitle";
+                                    file["languageTag"] = medias[x]["Part"][y]["Stream"][z]["languageTag"];
                                     files[i]["streams"].push(file);
                                     break;
                                 }
@@ -388,11 +403,15 @@ function fileSelectModalClose(){
 }
 
 // Create a modal file selector for downloads
-async function createFileSelect(files, srvAddress){
-    // Remove if it already exists
-    let el = document.getElementById(`${header["X-Plex-Product"]}-fileSelectModal`);
-    if (el){
-        el.remove();
+async function createFileSelect(files){
+    const options = (await browser.storage.local.get("options"))["options"] || null;   // Get options to autoselct
+    let selectSubs, selectRes
+    if (options) {
+        selectSubs = options.selectSubs;
+        selectRes = options.selectRes;
+    } else {
+        selectRes = 0;
+        selectSubs = [];
     }
     // Main div
     let fileSelectModal = document.createElement("div");
@@ -447,6 +466,13 @@ async function createFileSelect(files, srvAddress){
             let itemCBLbl = document.createElement("label");
             itemCBLbl.setAttribute("for", `item${i.toString()}`);
             itemCBLbl.innerText = `  ${files[0]["streams"][i]["title"]}`;
+            if (files[0]["streams"][i]["type"] === "subtitle" && selectSubs && selectSubs.includes(files[0]["streams"][i]["languageTag"])){
+                itemCB.checked = true;
+            } else {
+                if (files[0]["streams"][i]["mediaResolution"] === selectRes) {
+                    itemCB.checked = true;
+                }
+            }
             item.appendChild(itemCBLbl);
             fileSelectModalBodyMedia.appendChild(item);
         }
@@ -519,7 +545,9 @@ async function downloadItems(files){
 
 async function download(srvAddress, key){
     let files = await getMediaList(srvAddress, key);
-    createFileSelect(files, srvAddress);
+    if (files && files[0]["streams"].length > 0){    // We got some files
+        createFileSelect(files);
+    }
 }
 
 //Send list of shared servers to the backend
