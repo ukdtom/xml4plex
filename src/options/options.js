@@ -28,12 +28,19 @@ async function saveOptions() {
         return obj.selected === true;
     })
     const arrSelected = selected.map(obj => obj.value);
-    await browser.storage.local.set({'selectSubs': arrSelected});
+    const options = {};
+    options.selectSubs = arrSelected;
+    let elRes = document.getElementById("resolution");
+    console.log("Selected resolution: " + elRes.value);
+    options.selectRes = elRes.value;
+    await browser.storage.local.set({'options': options});
     alert("Options saved!");
 }
 
 async function loadOptions() {  // Load the options from storage and populate the multiselect
-    const arrSelectedSubs = (await browser.storage.local.get('selectSubs')).selectSubs || [];  // Get the selected subs from storage
+    let options = (await browser.storage.local.get('options')).options;
+    // Subs
+    const arrSelectedSubs = options.selectSubs || [];  // Get the selected subs from storage
     const data = [];
     for (const idx in langCodes) {
         let option = langCodes[idx];
@@ -44,4 +51,7 @@ async function loadOptions() {  // Load the options from storage and populate th
     }
     subs.data = data;
     subs.refresh();
+    // Res
+    let elRes = document.getElementById("resolution");
+    elRes.value = options.selectRes;
 }

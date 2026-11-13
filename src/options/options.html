@@ -10,9 +10,19 @@
     </head>
     <body>
         <h1>Option page for xml4Plex</h1>
-        <div>
-            <p>Select the subtitle languages that always will be added to the download queue if present as external subtitles</p>
-            <select id="subs" name="subs" multiple></select>
+        <div class="options">
+            <div class="resolution">
+                <label for="resolution">Choose a resolution to autoselect if present:</label>
+                <select name="resolution" id="resolution">
+                    <option value="720">720p</option>
+                    <option value="1080">1080p</option>
+                    <option value="4k">4K</option>
+                </select>
+            </div>
+            <div class="subs">
+                <p>Select the subtitle languages that always will be added to the download queue if present as external subtitles</p>
+                <select id="subs" name="subs" multiple></select>
+            </div>
         </div>
         <div class="footer">
             <button type="button" id="btnSave">Save Options</button>

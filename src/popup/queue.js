@@ -184,13 +184,6 @@ async function populateQueue() {    // Populate the listbox with the download qu
 
 // Toogle queue status
 async function toggleQueue(){
-    console.log("Ged 13 TODO *******************************")
-    //if (bQueueRunning){
-    /*
-    if (queue['queueRunning']){
-        alert('Existing download will continue until done');
-    }
-        */
     chrome.runtime.sendMessage({ event: 'toggleQueue' });
 }
 

@@ -5,16 +5,15 @@
   "description": "Show XML for a shared Plex Media Server",
   "content_scripts": [
     {
-      "matches": ["https://app.plex.tv/*"],
-      "js": ["contents/contentScript.js"]
+      "matches": ["https://app.plex.tv/desktop/*"],
+      "js": ["contents/contentScript.js"],
+      "css": ["contents/contentScript.css"]
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": [
-        "/assets/xml.png"
-      ],
-      "matches": ["https://app.plex.tv/*"]
+      "resources": [ "assets/xml.png", "assets/down-arrow.png", "assets/json.png" ],
+      "matches": [ "https://app.plex.tv/*" ]
     }
   ],
   "host_permissions": [
