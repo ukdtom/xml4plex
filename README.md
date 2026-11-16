@@ -2,14 +2,10 @@
 
 [![GitHub issues](https://img.shields.io/github/issues/ukdtom/xml4plex.svg?style=flat)](https://github.com/ukdtom/xml4plex/issues)
 [![Release](https://img.shields.io/github/release/ukdtom/xml4plex.svg?style=flat)](https://github.com/ukdtom/xml4plex/releases/latest)
-[![Download latest release](https://img.shields.io/github/downloads/WebTools-NG/WebTools-NG/latest/total.svg)](https://github.com/WebTools-NG/WebTools-NG/releases/latest)
-[![Download total](https://img.shields.io/github/downloads/WebTools-NG/WebTools-NG/total.svg)](https://github.com/WebTools-NG/WebTools-NG/releases)
+[![Download latest release](https://img.shields.io/github/downloads/ukdtom/xml4plex/latest/total.svg)](https://github.com/ukdtom/xml4plex/releases/latest)
+[![Download total](https://img.shields.io/github/downloads/ukdtom/xml4plex/total.svg)](https://github.com/ukdtom/xml4plex/releases)
 [![master](https://img.shields.io/badge/master-stable-green.svg?maxAge=2592000)]('')
 ![Maintenance](https://img.shields.io/badge/Maintained-Yes-green.svg)
-[![CodeQL](https://github.com/WebTools-NG/WebTools-NG/workflows/CodeQL/badge.svg)](https://github.com/WebTools-NG/WebTools-NG/actions?query=workflow%3ACodeQL)
-[![Build/release](https://github.com/WebTools-NG/WebTools-NG/actions/workflows/release.yml/badge.svg)](https://github.com/WebTools-NG/WebTools-NG/actions/workflows/release.yml)
-
-
 
 # xml4plex
 This is a Chrome extention
