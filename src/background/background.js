@@ -14,6 +14,7 @@ var servers = [];
 var serversInfo = [];
 const manifest = chrome.runtime.getManifest();
 
+
 //#region Event Listners and handlers
 
 // Requests allowed
