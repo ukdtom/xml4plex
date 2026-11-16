@@ -7,7 +7,6 @@ var user = {};      // Plex user
 var header = {};
 var mediaType;
 var SharedServers = {}; // Shared servers
-var modalObserver;
 var pageType;
 const manifest = chrome.runtime.getManifest();  // Get the manifest info
 let elTitle = null;
@@ -451,7 +450,7 @@ async function createFileSelect(files){
     // Modal body
     let fileSelectModalBody = document.createElement("div");
     fileSelectModalBody.classList = "modal-body modal-body-scroll dark-scrollbar";
-    fileSelectModalBody.innerHTML = `<p>Select items to dowwnload</p><p>Note: when downloading a subtitle, remove the .htm extention when saving</p>`;
+    fileSelectModalBody.innerHTML = `<p>Select items to dowwnload</p>`;
     let fileSelectModalBodyMedia = document.createElement("div");
     if (files[0]["streams"].length > -1){    // We got some files
         for (let i = 0; i < files[0]["streams"].length; i++){    // Add items to the modal selection

@@ -1,13 +1,13 @@
 /*********************************************
- * This file is the bacgound Queue Class
+ * This file is the background Queue Class
  *********************************************/
+
 "use strict";
 import { decryptValue } from '../shared/crypto.js';
 import { itemMovie, itemSub, itemEpisode} from '../shared/classes.js';
 
-//const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
-
 let active, activeID = null;    // Sadly needed due to a race condition when downloading subs
+let creating; // A global promise to avoid concurrency issues
 
 //#region Exported class
 
@@ -89,6 +89,74 @@ export class queue4 {
         return this;
     }
 
+    async #setupOffscreenDocument(path) {    // Create a temp offscreen document to handle blobs
+        /* Check all windows controlled by the service worker to see if one
+        of them is the offscreen document with the given path */
+        const offscreenUrl = browser.runtime.getURL(path);
+        const existingContexts = await browser.runtime.getContexts({
+            contextTypes: ['OFFSCREEN_DOCUMENT'],
+            documentUrls: [offscreenUrl]
+        });
+
+        if (existingContexts.length > 0) {
+            return;
+        }
+
+        // create offscreen document
+        if (creating) {
+            await creating;
+        } else {
+            creating = browser.offscreen.createDocument({
+            url: path,
+            reasons: ['BLOBS'],
+            justification: 'Needed to create an objectURL from backend',
+            });
+            await creating;
+            creating = null;
+        }
+    }
+
+    // Download a file to download folder
+    async #startDownloadOfTextToFile(fileContents, fileName) {
+        // Open a new tab offscreen so we can get the objectURL and the blob
+        await this.#setupOffscreenDocument('background/createObjectURL.html')
+        // Send message to offscreen document to get the url
+        let url = await browser.runtime.sendMessage({
+            event: 'getObjectURL',
+            target: 'offscreen',
+            prefs: fileContents
+        });
+        let prefs = {
+            filename: fileName,
+            url: url
+        };
+        await chrome.downloads.download(prefs); // Download the subtitle
+        await browser.offscreen.closeDocument();    // Close the offscreen document again
+    }
+
+    /****************
+     * If we download the subtitle using normal chrome API, it sadly has a mimetype on the PMS as html,
+     * meaning the extention of the saved file will be .htm
+     * so we need to use fetch, save it to a variable, convert to a blob, and then once more download the blob from
+     * this extention
+     */
+    async #getsub(prefs, token) {
+        let sub;
+        const header = (await browser.storage.local.get("header")).header;
+        header['X-Plex-Token'] = token;
+        const fileName = prefs.filename;
+        const url = prefs.url;
+        await fetch(url, {
+                headers: header
+            }).then( async response => {
+                if (response.ok){
+                    sub = await response.text();
+                }
+            }
+        );
+        this.#startDownloadOfTextToFile(sub, fileName)
+    }
+
     // The actual download
     async #download() {
         while (this.queueRunning) { // As long as the queue is set to run
@@ -110,7 +178,7 @@ export class queue4 {
                         const idx = this.queueOrder.indexOf(rec['id']);
                         this.queueOrder.splice(idx, 1); // Remove entry from the order array
                         delete this.queueData[rec['id']];    // Remove record from the metadata JSON
-                        await chrome.downloads.download(prefs);   // Start the download of a subtitle
+                        await this.#getsub(prefs, srv.accessToken); // Download the subtitle stream
                         await delay(2000);  // Wait 2000 msec due to race condition
                         await this.#saveQueue();  // Update storage
                     } else {    // Media download
@@ -162,17 +230,18 @@ export class queue4 {
     }
 
     onDownloadComplete(itemId) {    // Event listen for the download to complete
-    return new Promise(resolve => {
-        chrome.downloads.onChanged.addListener(function onChanged({id, state}) {
-            {async () => await delay(1000)};  // Wait 1000 msec due to race condition
-            if (id === itemId && state && state.current !== 'in_progress') {
-                chrome.downloads.onChanged.removeListener(onChanged);
-                resolve(state.current === 'complete');
-            }
+        return new Promise(resolve => {
+            chrome.downloads.onChanged.addListener(function onChanged({id, state}) {
+                //{async () => await delay(2000)};  // Wait 2000 msec due to race condition
+                console.log("Ged 33 onDownloadComplete itemId, id, state", itemId, id, state)   // Needed, since otherwise teh download will halt. TODO
+                if (id === itemId && state && state.current !== 'in_progress') {
+                    chrome.downloads.onChanged.removeListener(onChanged);
+                    resolve(state.current === 'complete');
+                }
+                });
             });
-        });
+        }
     }
-}
 
 //#endregion
 
