@@ -1,7 +1,7 @@
 # ![Logo](https://github.com/ukdtom/xml4plex/blob/main/wiki/logo.png) XML4Plex
 
 [![GitHub issues](https://img.shields.io/github/issues/ukdtom/xml4plex.svg?style=flat)](https://github.com/ukdtom/xml4plex/issues)
-[![Release](https://img.shields.io/github/release/WebTools-NG/WebTools-NG.svg?style=flat)](https://github.com/WebTools-NG/WebTools-NG/releases/latest)
+[![Release](https://img.shields.io/github/release/ukdtom/xml4plex.svg?style=flat)](https://github.com/ukdtom/xml4plex/releases/latest)
 [![Download latest release](https://img.shields.io/github/downloads/WebTools-NG/WebTools-NG/latest/total.svg)](https://github.com/WebTools-NG/WebTools-NG/releases/latest)
 [![Download total](https://img.shields.io/github/downloads/WebTools-NG/WebTools-NG/total.svg)](https://github.com/WebTools-NG/WebTools-NG/releases)
 [![master](https://img.shields.io/badge/master-stable-green.svg?maxAge=2592000)]('')
