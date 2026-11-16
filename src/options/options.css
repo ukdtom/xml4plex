@@ -5,3 +5,8 @@
     margin-bottom: 10px;
     margin-left: 10px;
 }
+
+.resolution {
+    display: flex;
+    flex-direction: column;
+}
