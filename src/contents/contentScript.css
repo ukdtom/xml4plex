@@ -5,3 +5,7 @@
     margin-top: 10px;
     gap: 10px; /* Space between the two images */
 }
+
+.hand {
+    cursor: pointer;
+}

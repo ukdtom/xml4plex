@@ -120,6 +120,7 @@ async function getdownImg() {   // Function to create and return the down arrow 
     img.style.width = "20px";
     img.title = "Download";
     img.onclick = function() {  clickDownIcon(); };
+    img.className = "hand";
     return img;
 }
 
@@ -130,6 +131,7 @@ async function getJSONImg() {   // Function to create and return the JSON image 
     img.style.width = "20px";
     img.title = "View JSON";
     img.onclick = function() {  clickJSONIcon(); };
+    img.className = "hand";
     return img;
 }
 
