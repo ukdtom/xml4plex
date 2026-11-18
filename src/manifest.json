@@ -6,7 +6,7 @@
   "content_scripts": [
     {
       "matches": ["https://app.plex.tv/desktop/*"],
-      "js": ["contents/contentScript.js"],
+      "js": ["screens/json/json.js", "screens/json/jsonpage.js", "contents/contentScript.js"],
       "css": ["contents/contentScript.css"]
     }
   ],

@@ -136,10 +136,7 @@ async function getJSONImg() {   // Function to create and return the JSON image 
 async function clickJSONIcon(){   // Function to handle the click event on the JSON icon
     const srvID = getIDFromURL(document.URL);
     const key = getKeyFromUrl(document.URL);
-    const urlJSON = `${SharedServers[srvID]["address"]}/library/metadata/${key}?checkFiles=1&includeAllConcerts=1&includeBandwidths=1&includeChapters=1&includeChildren=1&includeConcerts=1&includeExtras=1&includeFields=1&includeGeolocation=1&includeLoudnessRamps=1&includeMarkers=1&includeOnDeck=1&includePopularLeaves=1&includePreferences=1&includeRelated=1&includeRelatedCount=1&includeReviews=1&includeStations=1&X-Plex-Token=${SharedServers[srvID]["accessToken"]}`;
-    const blob = await fetch(urlJSON, {headers: header}).then((res) => res.blob());
-    var _url = window.URL.createObjectURL(blob);
-    window.open(_url, "_blank").focus();
+    await openJSONTab(srvID, key);
 }
 
 async function getXMLImg() {   // Function to create and return the XML image element
