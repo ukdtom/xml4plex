@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>XML4Plex Show JSON</title>
+        <style>
+            .renderjson a { text-decoration: none; }
+            .renderjson .disclosure { color: crimson;
+                                        font-size: 150%; }
+            .renderjson .syntax { color: grey; }
+            .renderjson .string { color: darkred; }
+            .renderjson .number { color: darkcyan; }
+            .renderjson .boolean { color: blueviolet; }
+            .renderjson .key    { color: darkblue; }
+            .renderjson .keyword { color: blue; }
+            .renderjson .object.syntax { color: lightseagreen; }
+            .renderjson .array.syntax  { color: orange; }
+        </style>
+        <link rel="stylesheet" href="json.css">
+    </head>
+    <body>
+        <h1>Show JSON</h1>
+        <br>
+        <div id="info">
+            <span style="font-weight:bold;">URL Used:</span>
+            <span id="url"></span>
+            <br>
+            <hr>
+            <pre id="json"></pre>
+        </div>
+    </body>
+    <script type="module" src="jsonpage.js"></script>
+    <script type="text/javascript" src="renderjson.js"></script>
+</html>

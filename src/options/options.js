@@ -33,6 +33,10 @@ async function saveOptions() {
     let elRes = document.getElementById("resolution");
     console.log("Selected resolution: " + elRes.value);
     options.selectRes = elRes.value;
+    let elResMax = document.getElementById("resolutionMax");
+    options.selectResMax = elResMax.value;
+    let elResMin = document.getElementById("resolutionMin");
+    options.selectResMin = elResMin.value;
     await browser.storage.local.set({'options': options});
     alert("Options saved!");
 }
@@ -54,4 +58,8 @@ async function loadOptions() {  // Load the options from storage and populate th
     // Res
     let elRes = document.getElementById("resolution");
     elRes.value = options.selectRes;
+    let elResMax = document.getElementById("resolutionMax");
+    elResMax.value = options.selectResMax;
+    let elResMin = document.getElementById("resolutionMin");
+    elResMin.value = options.selectResMin;
 }

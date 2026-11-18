@@ -6,19 +6,17 @@ import { queue4 } from './queue4.js';
 let queue45 = new queue4;
 queue45.updateFromStorage();
 
-
-
-
 // Global vars
 var servers = [];
 var serversInfo = [];
-const manifest = chrome.runtime.getManifest();
+const manifest = chrome.runtime.getManifest();  // Get the manifest.json for this extention
+let messageJSON = null; // Plaseholder for showJSON info
 
 
 //#region Event Listners and handlers
 
 // Requests allowed
-const validRequests = ['getPlexCookie', 'setGlobalVars', 'sharedServers', 'enqueue', 'deleteQueue', 'getQueue', 'deleteQueueItem', 'newOrder', 'toggleQueue'];
+const validRequests = ['getPlexCookie', 'setGlobalVars', 'sharedServers', 'enqueue', 'deleteQueue', 'getQueue', 'deleteQueueItem', 'newOrder', 'toggleQueue', 'showJSON', 'jsonPageReady'];
 const returnVal = ['sharedServers', 'getPlexCookie', 'getQueue'];   //Requests where we want to return something from
 
 // Message listner
@@ -28,8 +26,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (returnVal.includes(request.event)){
             return true; // return true to indicate you want to send a response asynchronously
         }
-    } else {
-        console.error("Ged 3-3 unauthorized request", request.event)
     }
 });
 
@@ -81,6 +77,12 @@ async function handleListener(request){
         case 'toggleQueue':
             queue45.toggleQueue();
             break;
+        case 'showJSON':
+            showJSON(prefs);
+            break;
+        case 'jsonPageReady':
+            jsonPageReady();
+            break;
         default:
             break;
     }
@@ -90,6 +92,19 @@ async function handleListener(request){
 
 
 //#region  Internal functions
+
+async function jsonPageReady() {  // send info to the showJSON tab
+    await browser.tabs.sendMessage(
+        messageJSON.tabID,
+        messageJSON
+    )
+    messageJSON = null;
+}
+
+async function showJSON(prefs) {    // Open the showJSON page in a new tab
+    let tabID = (await chrome.tabs.create({ url: chrome.runtime.getURL("screens/json/json.html") })).id;
+    messageJSON = { tabID: tabID, event: 'updateJSONPage', prefs: prefs};
+}
 
 async function setServerInfo(){
     const secret = await encryptValue(JSON.stringify(serversInfo))
