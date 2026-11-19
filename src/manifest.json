@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "name": "XML4Plex",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "Show XML for a shared Plex Media Server",
   "content_scripts": [
     {
       "matches": ["https://app.plex.tv/desktop/*"],
-      "js": ["screens/json/json.js", "screens/json/jsonpage.js", "contents/classFile.js", "contents/contentScript.js"],
+      "js": ["contents/spinner.js", "screens/json/json.js", "screens/json/jsonpage.js", "contents/classFile.js", "contents/contentScript.js"],
       "css": ["contents/contentScript.css"]
     }
   ],

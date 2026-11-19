@@ -269,9 +269,10 @@ function getMediaResolution(objJSON){   // Returns the resolution of the media, 
 }
 
 async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal selector
+    showSpinner();  // Show loading spinner
     // Avoid getting too much info from the PMS
-    const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,guid,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge';
-    const additionalParamSeason = 'excludeElements=Media,Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=grandparentStudio,librarySectionID,grandparentContentRating,title,grandparentTitle,parentTitle,summary,type,index,parentIndex,mediaCount,mediaCountOptimized,viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,guid,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge';
+    const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,guid,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge,originalTitle';
+    const additionalParamShowSeason = 'excludeElements=Media,Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=grandparentStudio,librarySectionID,grandparentContentRating,title,originalTitle,grandparentTitle,parentTitle,summary,type,index,parentIndex,mediaCount,mediaCountOptimized,viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,guid,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge';
     const url = `${srvAddress}/library/metadata/${key}?checkFiles=1&${additionalParam}`;
     const srvID = getIDFromURL(document.URL);
     // Start by getting the media info
@@ -280,14 +281,25 @@ async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal sele
     const libPath = await getSectionPath(srvAddress, jsonResponse['MediaContainer']["librarySectionID"], srvID);
     switch (type) {
         case 'show':
-            alert(`Download not supported for a ${type.toString()}`);
-            return [];
+            const urlShow = `${srvAddress}/library/metadata/${key}/allLeaves?checkFiles=1&${additionalParamShowSeason}`;
+            const responseShow = await fetchUrl(urlShow, srvID);
+            let resultArrShow = [];
+            let arrKeysShow = responseShow['MediaContainer']['Metadata'];
+            for (let idx = 0; idx < arrKeysShow.length; idx++) {
+                let urlMedia = `${srvAddress}${arrKeysShow[idx]['key']}?checkFiles=1&${additionalParam}`;
+                const mediaResponse = await fetchUrl(urlMedia, srvID)
+                let files = new fileItem();
+                let arrFiles = await files.add(mediaResponse, libPath)
+                resultArrShow = resultArrShow.concat(arrFiles);
+            }
+            hideSpinner();
+            return resultArrShow;
             break;
         case 'season':
-            const urlSeason = `${srvAddress}/library/metadata/${key}/children?checkFiles=1&${additionalParamSeason}`;
-            const response = await fetchUrl(urlSeason, srvID);
+            const urlSeason = `${srvAddress}/library/metadata/${key}/children?checkFiles=1&${additionalParamShowSeason}`;
+            const responseSeason = await fetchUrl(urlSeason, srvID);
             let resultArr = [];
-            let arrKeys = response['MediaContainer']['Metadata'];
+            let arrKeys = responseSeason['MediaContainer']['Metadata'];
             for (let idx = 0; idx < arrKeys.length; idx++) {
                 let urlMedia = `${srvAddress}${arrKeys[idx]['key']}?checkFiles=1&${additionalParam}`;
                 const mediaResponse = await fetchUrl(urlMedia, srvID)
@@ -295,11 +307,13 @@ async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal sele
                 let arrFiles = await files.add(mediaResponse, libPath)
                 resultArr = resultArr.concat(arrFiles);
             }
+             hideSpinner();
             return resultArr;
             break;
         default:
             let files = new fileItem();
             let arrFiles = await files.add(jsonResponse, libPath)
+             hideSpinner();
             return arrFiles;
     }
 }
