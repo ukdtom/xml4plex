@@ -169,7 +169,6 @@ export class queue4 {
                         this.queueOrder.splice(idx, 1); // Remove entry from the order array
                         delete this.queueData[rec['id']];    // Remove record from the metadata JSON
                         await this.#getsub(prefs, srv.accessToken); // Download the subtitle stream
-                        await delay(2000);  // Wait 2000 msec due to race condition
                         await this.#saveQueue();  // Update storage
                     } else {    // Media download
                         this.activeID = rec['id'];
@@ -177,7 +176,10 @@ export class queue4 {
                         this.active = await chrome.downloads.download(prefs);   // Start the download of a media
                         active = this.active;
                         await this.#saveQueue();  // Update storage with the download ID
-                        await this.onDownloadComplete(this.active); // Wait for the download to finish
+                        // Prevent serviceworker to go into idle mode
+                        const keepAlive = setInterval(chrome.runtime.getPlatformInfo, 25 * 1000);
+                        await this.#onDownloadComplete(this.active); // Wait for the download to finish
+                        clearInterval(keepAlive);   // Allow serviceworker to sleep again
                         const idx = this.queueOrder.indexOf(this.activeID);
                         this.queueOrder.splice(idx, 1); // Remove entry from the order array
                         delete this.queueData[this.activeID];    // Remove record from the metadata JSON
@@ -220,11 +222,9 @@ export class queue4 {
     }
 
 
-    onDownloadComplete(itemId) {    // Event listen for the download to complete
+    #onDownloadComplete(itemId) {    // Event listen for the download to complete
         return new Promise(resolve => {
             browser.downloads.onChanged.addListener(function onChanged({id, state}) {
-                //{async () => await delay(2000)};  // Wait 2000 msec due to race condition
-                //console.log("Ged 33 onDownloadComplete itemId, id, state", itemId, id, state)   // Needed, since otherwise the download will halt. TODO
                 if (id === itemId && state && state.current !== 'in_progress') {
                     browser.downloads.onChanged.removeListener(onChanged);
                     resolve(state.current === 'complete');
@@ -232,17 +232,6 @@ export class queue4 {
                 });
             });
         }
-
     }
-
-
-//#endregion
-
-//#region Internal functions
-
-// A delay function
-const delay = millis => new Promise((resolve, reject) => {
-  setTimeout(_ => resolve(), millis)
-});
 
 //#endregion
