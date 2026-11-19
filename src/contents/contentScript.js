@@ -2,6 +2,7 @@
 
 //(async () => {await browser.storage.local.clear()})();  // Clear all storage
 
+
 const validTypes = ["movie", "episode"];
 var user = {};      // Plex user
 var header = {};
@@ -9,7 +10,7 @@ var mediaType;
 var SharedServers = {}; // Shared servers
 var pageType;
 const manifest = chrome.runtime.getManifest();  // Get the manifest info
-let elTitle = null;
+let elTitle, mediaName, mediaDir = null;
 
 
 //#region Event Listners and handlers
@@ -268,7 +269,7 @@ function getMediaResolution(objJSON){   // Returns the resolution of the media, 
 }
 
 // Get a list of files/streams to present to the user
-async function getMediaList(srvAddress, key){
+async function OLDgetMediaList(srvAddress, key){
     const url = `${srvAddress}/library/metadata/${key}?checkFiles=1`;
     const srvID = getIDFromURL(document.URL);
     // Start by getting the media info
@@ -359,10 +360,35 @@ async function getMediaList(srvAddress, key){
                 }
             }
         }
-
     }
     return files;
 }
+
+async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal selector
+    // Avoid getting too much info from the PMS
+    const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,guid,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge';
+    const url = `${srvAddress}/library/metadata/${key}?checkFiles=1&${additionalParam}`;
+    const srvID = getIDFromURL(document.URL);
+    // Start by getting the media info
+    let infoHeader = JSON.parse(JSON.stringify(header));
+    infoHeader["X-Plex-Token"] = SharedServers[srvID]["accessToken"];
+    let jsonResponse;
+    try {
+        await fetch(url, {headers: infoHeader}).then( async response => {
+            if (response.ok){
+                jsonResponse = await response.json();
+            }
+        });
+    } catch(error) {
+        alert(`Download failed: ${error}`);
+    }
+    let files = new fileItem();
+    const libPath = await getSectionPath(srvAddress, jsonResponse['MediaContainer']["librarySectionID"], srvID);
+    let arrFiles = await files.add(jsonResponse, libPath)
+    return arrFiles;
+}
+
+
 
 // Returns an array of Library paths defined
 async function getSectionPath(srvAddress, libID, srvID){
@@ -403,12 +429,16 @@ function fileSelectModalClose(){
 // Create a modal file selector for downloads
 async function createFileSelect(files){
     const options = (await browser.storage.local.get("options"))["options"] || null;   // Get options to autoselct
-    let selectSubs, selectRes
+    let selectSubs, selectRes, selectResMax, selectResMin
     if (options) {
         selectSubs = options.selectSubs;
         selectRes = options.selectRes;
+        selectResMax = options.selectResMax;
+        selectResMin = options.selectResMin;
     } else {
         selectRes = 0;
+        selectResMax = 0;
+        selectResMin = 1000000;
         selectSubs = [];
     }
     // Main div
@@ -451,29 +481,34 @@ async function createFileSelect(files){
     fileSelectModalBody.classList = "modal-body modal-body-scroll dark-scrollbar";
     fileSelectModalBody.innerHTML = `<p>Select items to dowwnload</p>`;
     let fileSelectModalBodyMedia = document.createElement("div");
-    if (files[0]["streams"].length > -1){    // We got some files
-        for (let i = 0; i < files[0]["streams"].length; i++){    // Add items to the modal selection
-            let item = document.createElement('div');
-            let itemCB = document.createElement("input");
-            itemCB.type = "checkbox";
-            itemCB.id = `item${i.toString()}`;
-            itemCB.style.marginRight = "5px";
-            //itemCB.value = files[0]["streams"][i]["key"];
-            itemCB.value = i;
-            item.appendChild(itemCB);
-            let itemCBLbl = document.createElement("label");
-            itemCBLbl.setAttribute("for", `item${i.toString()}`);
-            itemCBLbl.innerText = `  ${files[0]["streams"][i]["title"]}`;
-            if (files[0]["streams"][i]["type"] === "subtitle" && selectSubs && selectSubs.includes(files[0]["streams"][i]["languageTag"])){
+    for (let idx = 0; idx < files.length; idx++){   // Add items to the modal
+        let item = document.createElement('div');
+        let itemCB = document.createElement("input");
+        itemCB.type = "checkbox";
+        itemCB.id = files[idx]['id'];
+        itemCB.style.marginRight = "5px";
+        itemCB.value = files[idx];
+        item.appendChild(itemCB);
+        let itemCBLbl = document.createElement("label");
+        itemCBLbl.setAttribute("for", files[idx]['id']);
+        itemCBLbl.innerText = files[idx]['displayTitle'];
+        if (files[idx]['languageTag']) { // We have a subtitle, so let's check if it should be pre-selected
+            if (selectSubs.includes(files[idx]['languageTag'])) {
                 itemCB.checked = true;
-            } else {
-                if (files[0]["streams"][i]["mediaResolution"] === selectRes) {
-                    itemCB.checked = true;
-                }
             }
-            item.appendChild(itemCBLbl);
-            fileSelectModalBodyMedia.appendChild(item);
+        } else { // We have a video
+            const resolution = files[idx]['resolution'];
+            if (resolution === selectRes) { // Got the preferred resolution
+                itemCB.checked = true;
+            } else if (resolution === selectResMax) {
+                itemCB.checked = true;
+            } else if (resolution === selectResMin) {
+                itemCB.checked = true;
+            }
         }
+        item.appendChild(itemCBLbl);
+        fileSelectModalBodyMedia.appendChild(item);
+
     }
     fileSelectModalBody.appendChild(fileSelectModalBodyMedia);
     fileSelectModalContent.appendChild(fileSelectModalBody);
@@ -485,7 +520,7 @@ async function createFileSelect(files){
     // Download button
     let fileSelectModalFooterContentsBtnDwn = document.createElement("button");
     fileSelectModalFooterContentsBtnDwn.type = "button";
-    fileSelectModalFooterContentsBtnDwn.innerText = "Download";
+    fileSelectModalFooterContentsBtnDwn.innerText = "Add to download queue";
     fileSelectModalFooterContentsBtnDwn.onclick = function() { downloadItems(files); };
     fileSelectModalFooterContents.appendChild(fileSelectModalFooterContentsBtnDwn);
     fileSelectModalFooter.appendChild(fileSelectModalFooterContents);
@@ -497,8 +532,8 @@ async function downloadItems(files){
     const srvID = getIDFromURL(document.URL);
     let itemsDwn = [];
     let arrItemsDwn = [];   // Used by the Queue
-    for (let i = 0; i < files[0]["streams"].length; i++){
-        let el = document.getElementById(`item${i.toString()}`);
+    for (let i = 0; i < files.length; i++){
+        let el = document.getElementById(`${files[i]['id']}`);
         if (el.checked){
             itemsDwn.push(i);
         }
@@ -506,34 +541,7 @@ async function downloadItems(files){
     fileSelectModalClose();
     if (itemsDwn.length > 0){   // User selected items to download
         for (let i = 0; i < itemsDwn.length; i++){
-            let stream = JSON.parse(JSON.stringify(files[0]["streams"][itemsDwn[i]]));
-            let queueItem = {};
-            queueItem["title"] = files[0]["title"];
-            queueItem["type"] = files[0]["type"];
-            queueItem["srvID"] = srvID;
-            queueItem["key"] = stream["key"];
-            if (files[0].hasOwnProperty("showTitle")){
-                queueItem["showTitle"] = files[0]["showTitle"];
-            }
-            if (files[0].hasOwnProperty("season")){
-                queueItem["season"] = files[0]["season"];
-            }
-            if (files[0].hasOwnProperty("episode")){
-                queueItem["episode"] = files[0]["episode"];
-            }
-            queueItem["fileName"] = `${stream["fileDir"]}/${stream["filename"]}`;
-            if (queueItem["fileName"].endsWith(".htm")){    // Subtitle file
-                queueItem["displayTitle"] = `${files[0]["title"]} ${stream["title"]}`;
-                queueItem["type"] = "subtitle";
-                queueItem["fileName"] = queueItem["fileName"].slice(0, -4);  // Remove the .htm extension
-            } else
-            {
-                queueItem["displayTitle"] = `${files[0]["title"]} (${queueItem["type"]})`;
-                if (files[0].hasOwnProperty("summary")){
-                    queueItem["summary"] = files[0]["summary"];
-                }
-            }
-            arrItemsDwn.push(queueItem);
+            arrItemsDwn.push(files[itemsDwn[i]]);
         }
         await chrome.runtime.sendMessage({ event: 'enqueue', prefs: arrItemsDwn});
     } else {
@@ -542,8 +550,9 @@ async function downloadItems(files){
 }
 
 async function download(srvAddress, key){
-    let files = await getMediaList(srvAddress, key);
-    if (files && files[0]["streams"].length > 0){    // We got some files
+    let files = await fetchMediaInfo(srvAddress, key);
+    //let files = await getMediaList(srvAddress, key);
+    if (files.length > 0){    // We got some files
         createFileSelect(files);
     }
 }

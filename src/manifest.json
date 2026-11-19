@@ -1,19 +1,19 @@
 {
   "manifest_version": 3,
   "name": "XML4Plex",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Show XML for a shared Plex Media Server",
   "content_scripts": [
     {
       "matches": ["https://app.plex.tv/desktop/*"],
-      "js": ["screens/json/json.js", "screens/json/jsonpage.js", "contents/contentScript.js"],
+      "js": ["screens/json/json.js", "screens/json/jsonpage.js", "contents/classFile.js", "contents/contentScript.js"],
       "css": ["contents/contentScript.css"]
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [ "assets/xml.png", "assets/down-arrow.png", "assets/json.png" ],
-      "matches": [ "https://app.plex.tv/*", "<all_urls>" ]
+      "matches": [ "<all_urls>" ]
     }
   ],
   "host_permissions": [
