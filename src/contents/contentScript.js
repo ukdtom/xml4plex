@@ -268,111 +268,46 @@ function getMediaResolution(objJSON){   // Returns the resolution of the media, 
     return null;
 }
 
-// Get a list of files/streams to present to the user
-async function OLDgetMediaList(srvAddress, key){
-    const url = `${srvAddress}/library/metadata/${key}?checkFiles=1`;
-    const srvID = getIDFromURL(document.URL);
-    // Start by getting the media info
-    let infoHeader = JSON.parse(JSON.stringify(header));
-    infoHeader["X-Plex-Token"] = SharedServers[srvID]["accessToken"];
-    let jsonResponse;
-    try {
-        await fetch(url, {headers: infoHeader}).then( async response => {
-            if (response.ok){
-                jsonResponse = await response.json();
-            }
-        });
-    } catch(error) {
-        alert(`Download failed: ${error}`);
-    }
-    const mediaType = getMediaType(jsonResponse);
-    const mediaResolution = getMediaResolution(jsonResponse);
-    if (!validTypes.includes(mediaType)){
-        alert(`Media type ${mediaType} is not supported for download`);
-        return null;
-    }
-    let files = {};
-    let metadata = jsonResponse["MediaContainer"]["Metadata"];
-    const libPath = await getSectionPath(srvAddress, metadata[0]["librarySectionID"], srvID);
-    for (let i = 0; i < metadata.length; i++){    // Walk Metadata array
-        files[i] = {};
-        files[i]["title"] = metadata[i]["title"];
-        files[i]["type"] = metadata[i]["type"];
-        files[i]["streams"] = [];
-        if (metadata[i].hasOwnProperty("grandparentTitle")){
-            files[i]["showTitle"] = metadata[i]["grandparentTitle"];
-        }
-        if (metadata[i].hasOwnProperty("parentIndex")){
-            files[i]["season"] = metadata[i]["parentIndex"];
-        }
-        if (metadata[i].hasOwnProperty("index")){
-            files[i]["episode"] = metadata[i]["index"];
-        }
-        if (metadata[i].hasOwnProperty("summary")){
-            files[i]["summary"] = metadata[i]["summary"];
-        }
-        let medias = metadata[i]["Media"];
-        for (let x = 0; x < medias.length; x++){    // Walk Media array
-            let media = {};
-            media["resolution"] = medias[x]["videoResolution"];
-            media["Part"] = [];
-            if (medias[x]["Part"][0]["accessible"] && medias[x]["Part"][0]["exists"]){  //Only if file exists and can be accessed
-                for (let y = 0; y < medias[x]["Part"].length; y++){ //Walk the parts
-                    let filename, filedir;
-                    for (let z = 0; z < medias[x]["Part"][y]["Stream"].length; z++){   //Walk the streams
-                        let file = {};
-                        switch (medias[x]["Part"][y]["Stream"][z]["streamType"]){
-                            case 1: // Media file
-                                file["title"] = `${files[i]["title"]} (${medias[x]["Part"][y]["Stream"][z]["displayTitle"]})`;
-                                file["key"] = medias[x]["Part"][y]["key"];
-                                // Get filedir and filename
-                                filename = medias[x]["Part"][y]["file"];
-                                file["filename"] = filename.split('\\').pop().split('/').pop();
-                                for (let n=0; n < libPath.length; n++){ //Walk defined library paths
-                                    if ((filename.startsWith(libPath[n])) && ((filename[libPath[n].length] == '/') || (filename[libPath[n].length] == '\\'))) {
-                                        file["fileDir"] = filename.slice(libPath[n].length+1).slice(0, -file["filename"].length);
-                                        if (file["fileDir"].endsWith("/") || file["fileDir"].endsWith("\\")){
-                                            file["fileDir"] = file["fileDir"].slice(0, -1);
-                                        }
-                                        filedir = file["fileDir"];
-                                        break;
-                                    }
-                                }
-                                filename = file["filename"];
-                                file["type"] = "media";
-                                file["mediaResolution"] = mediaResolution;
-                                files[i]["streams"].push(file);
-                                break;
-                            case 3: // Subtitle
-                                if (medias[x]["Part"][y]["Stream"][z].hasOwnProperty("key")){   //Got an external sub?
-                                    file["key"] = medias[x]["Part"][y]["Stream"][z]["key"];
-                                    file["title"] = medias[x]["Part"][y]["Stream"][z]["extendedDisplayTitle"];
-                                    file["filename"] = `${filename.replace(/\.[^/.]+$/, "")}.${medias[x]["Part"][y]["Stream"][z]["languageTag"]}.${medias[x]["Part"][y]["Stream"][z]["format"]}.htm`;
-                                    file["fileDir"] = filedir;
-                                    file["language"] = medias[x]["Part"][y]["Stream"][z]["language"];
-                                    file["type"] = "subtitle";
-                                    file["languageTag"] = medias[x]["Part"][y]["Stream"][z]["languageTag"];
-                                    files[i]["streams"].push(file);
-                                    break;
-                                }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return files;
-}
-
 async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal selector
     // Avoid getting too much info from the PMS
     const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,guid,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge';
+    const additionalParamSeason = 'excludeElements=Media,Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=grandparentStudio,librarySectionID,grandparentContentRating,title,grandparentTitle,parentTitle,summary,type,index,parentIndex,mediaCount,mediaCountOptimized,viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,guid,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge';
     const url = `${srvAddress}/library/metadata/${key}?checkFiles=1&${additionalParam}`;
     const srvID = getIDFromURL(document.URL);
     // Start by getting the media info
+    let jsonResponse = await fetchUrl(url, srvID);
+    const type = await getMediaType(jsonResponse);
+    const libPath = await getSectionPath(srvAddress, jsonResponse['MediaContainer']["librarySectionID"], srvID);
+    switch (type) {
+        case 'show':
+            alert(`Download not supported for a ${type.toString()}`);
+            return [];
+            break;
+        case 'season':
+            const urlSeason = `${srvAddress}/library/metadata/${key}/children?checkFiles=1&${additionalParamSeason}`;
+            const response = await fetchUrl(urlSeason, srvID);
+            let resultArr = [];
+            let arrKeys = response['MediaContainer']['Metadata'];
+            for (let idx = 0; idx < arrKeys.length; idx++) {
+                let urlMedia = `${srvAddress}${arrKeys[idx]['key']}?checkFiles=1&${additionalParam}`;
+                const mediaResponse = await fetchUrl(urlMedia, srvID)
+                let files = new fileItem();
+                let arrFiles = await files.add(mediaResponse, libPath)
+                resultArr = resultArr.concat(arrFiles);
+            }
+            return resultArr;
+            break;
+        default:
+            let files = new fileItem();
+            let arrFiles = await files.add(jsonResponse, libPath)
+            return arrFiles;
+    }
+}
+
+async function fetchUrl(url, srvID) {  // Return a json response or null if we have an error
     let infoHeader = JSON.parse(JSON.stringify(header));
     infoHeader["X-Plex-Token"] = SharedServers[srvID]["accessToken"];
-    let jsonResponse;
+    let jsonResponse = null;
     try {
         await fetch(url, {headers: infoHeader}).then( async response => {
             if (response.ok){
@@ -382,13 +317,8 @@ async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal sele
     } catch(error) {
         alert(`Download failed: ${error}`);
     }
-    let files = new fileItem();
-    const libPath = await getSectionPath(srvAddress, jsonResponse['MediaContainer']["librarySectionID"], srvID);
-    let arrFiles = await files.add(jsonResponse, libPath)
-    return arrFiles;
+    return jsonResponse
 }
-
-
 
 // Returns an array of Library paths defined
 async function getSectionPath(srvAddress, libID, srvID){
@@ -551,7 +481,6 @@ async function downloadItems(files){
 
 async function download(srvAddress, key){
     let files = await fetchMediaInfo(srvAddress, key);
-    //let files = await getMediaList(srvAddress, key);
     if (files.length > 0){    // We got some files
         createFileSelect(files);
     }

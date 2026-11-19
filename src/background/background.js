@@ -12,7 +12,6 @@ var serversInfo = [];
 const manifest = chrome.runtime.getManifest();  // Get the manifest.json for this extention
 let messageJSON = null; // Plaseholder for showJSON info
 
-
 //#region Event Listners and handlers
 
 // Requests allowed
