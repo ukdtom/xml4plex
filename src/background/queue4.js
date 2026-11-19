@@ -4,7 +4,9 @@
 
 "use strict";
 import { decryptValue } from '../shared/crypto.js';
-import { itemMovie, itemSub, itemEpisode} from '../shared/classes.js';
+
+
+
 
 let active, activeID = null;    // Sadly needed due to a race condition when downloading subs
 let creating; // A global promise to avoid concurrency issues
@@ -33,19 +35,7 @@ export class queue4 {
 
     async enqueue(arrData){   // Add an array of records to the queue
         for (const idx in arrData){
-            let item, result;
-            switch (arrData[idx]['type']) {
-                case 'movie':
-                    item = new itemMovie();
-                    break;
-                case 'subtitle':
-                    item = new itemSub();
-                    break;
-                case 'episode':
-                    item = new itemEpisode();
-                    break;
-            }
-            result = item.add(arrData[idx]);
+            let result = arrData[idx];
             if (!this.queueOrder.includes(result['id'])) {  // Only add item to queue if not already there
                 this.queueData[result['id']] = JSON.parse(JSON.stringify(result))
                 this.queueOrder.push(result['id']);
@@ -229,19 +219,22 @@ export class queue4 {
         chrome.runtime.sendMessage({ event: 'update', prefs: this}).catch(() => {});
     }
 
+
     onDownloadComplete(itemId) {    // Event listen for the download to complete
         return new Promise(resolve => {
-            chrome.downloads.onChanged.addListener(function onChanged({id, state}) {
+            browser.downloads.onChanged.addListener(function onChanged({id, state}) {
                 //{async () => await delay(2000)};  // Wait 2000 msec due to race condition
-                console.log("Ged 33 onDownloadComplete itemId, id, state", itemId, id, state)   // Needed, since otherwise teh download will halt. TODO
+                //console.log("Ged 33 onDownloadComplete itemId, id, state", itemId, id, state)   // Needed, since otherwise the download will halt. TODO
                 if (id === itemId && state && state.current !== 'in_progress') {
-                    chrome.downloads.onChanged.removeListener(onChanged);
+                    browser.downloads.onChanged.removeListener(onChanged);
                     resolve(state.current === 'complete');
                 }
                 });
             });
         }
+
     }
+
 
 //#endregion
 
@@ -252,96 +245,4 @@ const delay = millis => new Promise((resolve, reject) => {
   setTimeout(_ => resolve(), millis)
 });
 
-//#endregion
-
-//#region Internal classes
-class itemMovie1 {
-    constructor() {
-        this.type = 'movie';
-        this.title = null;
-        this.summary = null;
-        this.srvID = null;
-        this.key = null;
-        this.id = null;
-        this.fileName = null;
-        this.displayTitle = null;
-    }
-
-    add (data) {
-        this.title = data.title;
-        this.summary = data.summary;
-        this.srvID = data.srvID;
-        this.key = data.key;
-        this.id = (() => {
-            const keys = this.key.split('/');
-            return `${prefix}${keys[3]}-${keys[4]}`
-        })();
-        this.fileName = data.fileName;
-        this.displayTitle = data.displayTitle;
-        return this;
-    }
-}
-
-class itemSub1 {
-    constructor() {
-        this.type = 'subtitle';
-        this.title = null;
-        this.srvID = null;
-        this.key = null;
-        this.fileName = null;
-        this.displayTitle = null;
-        this.id = null;
-        this.showTitle = null;  // Only set if sub is for an episode
-        this.se = null; //SxxEyy
-    }
-
-    add (data) {
-        this.title = data.title;
-        this.srvID = data.srvID;
-        this.key = data.key;
-        this.fileName = data.fileName;
-        this.displayTitle = data.displayTitle;
-        // Generate the ID
-        const arrKey = data['key'].split('/');
-        if ( data.hasOwnProperty('episode')) {  // Sub is for an episode
-            this.showTitle = data.showTitle;
-            this.se = `S${data["season"].toString().padStart(2, "0")}E${data["episode"].toString().padStart(2, "0")}`;
-            this.id = `${prefix}${this.srvID}-${arrKey[3]}`;
-        } else {    // Sub is for a movie
-            this.id = `${prefix}${this.srvID}-${arrKey[3]}`;
-        }
-        return this;
-    }
-}
-
-class itemEpisode1 {
-    constructor() {
-        this.type = 'episode';
-        this.title = null;
-        this.summary = null;
-        this.srvID = null;
-        this.showTitle = null;
-        this.key = null;
-        this.id = null;
-        this.fileName = null;
-        this.displayTitle = null;
-        this.se = null;
-    }
-
-    add (data) {
-        this.title = data.title;
-        this.summary = data.summary;
-        this.srvID = data.srvID;
-        this.showTitle = data.showTitle;
-        this.key = data.key;
-        this.id = (() => {
-            const keys = this.key.split('/');
-            return `${prefix}${keys[3]}-${keys[4]}`
-        })();
-        this.fileName = data.fileName;
-        this.displayTitle = data.displayTitle;
-        this.se = `S${data["season"].toString().padStart(2, "0")}E${data["episode"].toString().padStart(2, "0")}`;
-        return this;
-    }
-}
 //#endregion
