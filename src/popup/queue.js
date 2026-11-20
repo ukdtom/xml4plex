@@ -74,7 +74,7 @@ const manifest = chrome.runtime.getManifest();
 */
 async function update(queueNew){
     queue = queueNew;       // Update cache with new info
-    setQueueStatus(queue['queueRunning']);  // Show if queue is running or not
+    setQueueStatus(queue);  // Show if queue is running or not
     setQueueButton(queue['queueRunning'], (queue['queueOrder'].length > 0));  // Set txt on queue start/stop button and enable/disable if needed
     setListBox();    // Update the listbox from the queue
 }
@@ -133,10 +133,13 @@ function setQueueButton(status, QueuePresent) { // Set txt on queue start/stop b
     btnQueue.disabled = !QueuePresent;
 }
 
-function setQueueStatus(status) {   // Show if queue is running or not
+function setQueueStatus(queue) {   // Show if queue is running or not
     const queueStatus = document.getElementById('queueStatus');
-    const htmlTxt = status? `<b>Queue:</b> Running`: "<b>Queue:</b> Stopped";
+    const htmlTxt = queue['queueRunning']? `<b>Queue:</b> Running`: "<b>Queue:</b> Stopped";
     queueStatus.innerHTML = htmlTxt;
+    const currentDwn = document.getElementById("currentDwn");
+    let dwnHtmlTxt = (queue['currentlyDownloading'] === '')? ``: `<b>Currently downloading: </b>${queue['currentlyDownloading']}`;
+    currentDwn.innerHTML = dwnHtmlTxt;
 }
 
 // Show what is currently been downloaded

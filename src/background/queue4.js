@@ -22,6 +22,7 @@ export class queue4 {
         this.active = null; // Id from the chrome download queue of the item currently downloading
         this.activeID = null;   // ID from this queue that is currently been downloaded
         this.continue = false;
+        this.currentlyDownloading = ""; //Filename of current download
     }
 
     getQueue() {    // Return the queue
@@ -120,8 +121,8 @@ export class queue4 {
             filename: fileName,
             url: url
         };
-        await chrome.downloads.download(prefs); // Download the subtitle
-        await browser.offscreen.closeDocument();    // Close the offscreen document again
+        try {await chrome.downloads.download(prefs); } catch {}; // Download the subtitle
+        try {await browser.offscreen.closeDocument(); } catch {}; // Close the offscreen document again
     }
 
     /****************
@@ -164,11 +165,14 @@ export class queue4 {
                     prefs['filename'] = rec['fileName'];
                     prefs['url'] = url;
                     prefs['saveAs'] = false;
+                    this.currentlyDownloading = rec['displayTitle'];
+                    await this.#saveQueue();
                     if (rec['type'] === 'subtitle') {   // A sub is downloaded so fast we can't even detect it, so simply nuke from the queue
                         const idx = this.queueOrder.indexOf(rec['id']);
                         this.queueOrder.splice(idx, 1); // Remove entry from the order array
                         delete this.queueData[rec['id']];    // Remove record from the metadata JSON
                         await this.#getsub(prefs, srv.accessToken); // Download the subtitle stream
+                        this.currentlyDownloading = '';
                         await this.#saveQueue();  // Update storage
                     } else {    // Media download
                         this.activeID = rec['id'];
@@ -185,6 +189,7 @@ export class queue4 {
                         delete this.queueData[this.activeID];    // Remove record from the metadata JSON
                         this.active = null;
                         this.activeID = null;
+                        this.currentlyDownloading = '';
                         await this.#saveQueue();  // Update storage
                     }
                    // this.queueRunning = false // Stop while testing
