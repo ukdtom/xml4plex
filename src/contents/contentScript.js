@@ -575,7 +575,7 @@ async function checkForUpdate() {   // Check if a newer version is avail on gith
             // use the json
             gitVer = json['tag_name'];
         });
-    if (gitVer != manifest.version) {
+    if (gitVer != `v${manifest.version}`) {
         const alertMsg = `You are running version v${manifest.version} of "${manifest.name}", but version ${gitVer} is ready for download on ${gitRepo}`;
         alert(alertMsg);
     }
