@@ -52,6 +52,7 @@ async function main(){
     }
     header = await setHeader();    //Set the web requests header
     getSharedServers();
+    checkForUpdate();   // Check for updates on GitHub
 }
 
 //#region Internal functions
@@ -320,7 +321,9 @@ async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal sele
 
 async function fetchUrl(url, srvID) {  // Return a json response or null if we have an error
     let infoHeader = JSON.parse(JSON.stringify(header));
-    infoHeader["X-Plex-Token"] = SharedServers[srvID]["accessToken"];
+    if (srvID) {
+        infoHeader["X-Plex-Token"] = SharedServers[srvID]["accessToken"];
+    }
     let jsonResponse = null;
     try {
         await fetch(url, {headers: infoHeader}).then( async response => {
@@ -560,5 +563,22 @@ const getStoredKey = async (key) => {
       });
     });
 };
+
+async function checkForUpdate() {   // Check if a newer version is avail on github
+    const urlGithub = 'https://api.github.com/repos/UKDTOM/xml4plex/releases/latest';
+    const gitRepo = 'https://github.com/ukdtom/xml4plex';
+
+    let gitVer = null
+    await fetch(urlGithub)
+        .then(function(response) { return response.json(); })
+        .then(function(json) {
+            // use the json
+            gitVer = json['tag_name'];
+        });
+    if (gitVer != manifest.version) {
+        const alertMsg = `You are running version v${manifest.version} of "${manifest.name}", but version ${gitVer} is ready for download on ${gitRepo}`;
+        alert(alertMsg);
+    }
+}
 
 //#endregion
