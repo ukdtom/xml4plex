@@ -4,6 +4,8 @@
 
 "use strict";
 
+const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
+
 class fileItem {
     constructor() {
         this.type = null;
@@ -24,8 +26,28 @@ class fileItem {
         const metadataLength = jsonResponse["MediaContainer"]["Metadata"].length;
         let arrFiles = [];
         for (let idxMetadata = 0; idxMetadata < metadataLength; idxMetadata++) {
+            let extras = [];
             const mediaLength = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"].length;
+            const mediaTitle = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["title"];
             for (let idxMedia = 0; idxMedia < mediaLength; idxMedia++){
+                if (jsonResponse["MediaContainer"]["Metadata"][idxMetadata].hasOwnProperty('Extras')) {  //Extras found
+                    extras = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]['Extras']['Metadata'];
+                    console.log("Ged 66 extras", extras)
+                    for (let idxExtra = 0; idxExtra < extras.length; idxExtra++) {  // Let's walk the extras and see if they are local
+                        const extra = extras[idxExtra];
+                        if (extra['guid'].startsWith('file')) { // We found a local Extra
+                            console.log("Ged 67 extra", extra)
+                            let file = new fileItem();
+                            let extraRec = file.#addExtra(extra, libPath, mediaTitle);
+                            console.log("Ged 55 extraRec", extraRec)
+
+
+
+                        }
+
+                    }
+
+                }
                 const partLength = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"].length;
                 for (let idxPart = 0; idxPart < partLength; idxPart++){
                     const streamLength = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"].length;
@@ -39,12 +61,40 @@ class fileItem {
                 }
             }
         }
+        // Now look for local extras and add those as well
 
         return arrFiles;
     }
 
+    #addExtra(jsonResponse, libPath, mediaTitle) {  // Adds an extra record
+        console.log("Ged 99 extra", jsonResponse)
+        this.title = jsonResponse['title'];
+        this.type = 'Extra';
+        this.videoResolution = jsonResponse['Media'][0]['videoResolution'];
+        this.resolution = this.videoResolution;
+        this.key = jsonResponse['Media'][0]['Part'][0]['key'];
+        this.displayTitle = `${mediaTitle} - ${this.title} (${this.type})`;
+        this.srvID = getIDFromURL(document.URL);
+        const arrKey = this.key.split('/');
+        this.id = `${prefix}-${this.srvID}-${arrKey[3]}-${this.type}`;
+        //File Name
+        const extraFile = jsonResponse['Media'][0]['Part'][0]['file'];
+        console.log("Ged 78 extraFileName", extraFile)
+        for (let idx = 0; idx < libPath.length; idx++) {
+            if (extraFile.startsWith(libPath[idx]) && ((extraFile[libPath[idx].length] == '/') || (extraFile[libPath[idx].length] == '\\'))) {
+                this.fileName = extraFile.slice(libPath[idx].length + 1);
+                mediaName = this.fileName.replace(/^.*[\\/]/, '');
+                mediaDir = this.fileName.replace(this.fileName.replace(/^.*[\\/]/, ''), '');
+                break;
+            }
+        }
+
+
+
+        return this;
+    }
+
     #add(jsonResponse, idxMetadata, idxMedia, idxPart, idxStream, libPath){
-        const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
         // Get the media type
         const streamType = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["streamType"];
         this.srvID = getIDFromURL(document.URL);
@@ -56,7 +106,6 @@ class fileItem {
                     this.resolution = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["videoResolution"];
                     this.key = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["key"];
                     this.title = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["title"];
-                    //fileName = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["file"];
                     this.displayTitle = `${this.title} ${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["extendedDisplayTitle"]} (${this.type})`
                     this.summary = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]['summary'];
                     break;
