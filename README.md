@@ -1,4 +1,4 @@
-# ![Logo](https://github.com/ukdtom/xml4plex/blob/main/src/assets/logo.png) XML4Plex
+# ![Logo](https://github.com/ukdtom/xml4plex/blob/main/src/assets/xml.png) XML4Plex
 
 [![GitHub issues](https://img.shields.io/github/issues/ukdtom/xml4plex.svg?style=flat)](https://github.com/ukdtom/xml4plex/issues)
 [![Release](https://img.shields.io/github/release/ukdtom/xml4plex.svg?style=flat)](https://github.com/ukdtom/xml4plex/releases/latest)
