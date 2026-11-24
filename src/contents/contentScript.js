@@ -91,9 +91,7 @@ async function gotMedia(request){
             if (el) {
                 break;
             } else {
-                // Wait for a short period before checking again
-                const waitTime = 100;
-                await new Promise(resolve => setTimeout(resolve, waitTime));
+                await delay(100) // Wait for a short period before checking again
             }
         }
         // Now we have the title element, inject the XML and download icons
@@ -103,7 +101,14 @@ async function gotMedia(request){
 }
 
 async function getIconsDiv(){   // Function to create and return a div containing the XML and download icons
-    const server = SharedServers[getIDFromURL(document.URL)];
+    let server = SharedServers[getIDFromURL(document.URL)];
+    while (!server.hasOwnProperty('plexPass')) {
+        server = SharedServers[getIDFromURL(document.URL)];
+        if (server.hasOwnProperty('plexPass')) {
+            break;
+        }
+         await delay(500);
+    }
     const divXML4Plex = document.createElement("div");
     divXML4Plex.id = `divXML4Plex`;
     divXML4Plex.className = "divXML4Plex";
@@ -116,8 +121,9 @@ async function getIconsDiv(){   // Function to create and return a div containin
 }
 
 async function getdownImg() {   // Function to create and return the down arrow image element
+    console.log("Ged get img dwn")
     const img = document.createElement("img");
-    img.src = chrome.runtime.getURL("assets/down-arrow.png");
+    img.src = await chrome.runtime.getURL("assets/down-arrow.png");
     img.alt = "Down Arrow";
     img.style.width = "20px";
     img.title = "Download";
@@ -273,51 +279,16 @@ async function fetchMediaInfo(srvAddress, key) {   // Fetch media for modal sele
     showSpinner();  // Show loading spinner
     // Avoid getting too much info from the PMS
     const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge,originalTitle&includeExtras=1';
-    const additionalParamShowSeason = 'excludeElements=Media,Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=grandparentStudio,librarySectionID,grandparentContentRating,title,originalTitle,grandparentTitle,parentTitle,summary,type,index,parentIndex,mediaCount,mediaCountOptimized,viewCount,ratingKey,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge&includeExtras=1';
     const url = `${srvAddress}/library/metadata/${key}?checkFiles=1&${additionalParam}`;
     const srvID = getIDFromURL(document.URL);
     // Start by getting the media info
     let jsonResponse = await fetchUrl(url, srvID);
-    console.log("Ged 22 jsonResponse", jsonResponse)
     const type = await getMediaType(jsonResponse);
     const libPath = await getSectionPath(srvAddress, jsonResponse['MediaContainer']["librarySectionID"], srvID);
-    switch (type) {
-        case 'show':
-            const urlShow = `${srvAddress}/library/metadata/${key}/allLeaves?checkFiles=1&${additionalParamShowSeason}`;
-            const responseShow = await fetchUrl(urlShow, srvID);
-            let resultArrShow = [];
-            let arrKeysShow = responseShow['MediaContainer']['Metadata'];
-            for (let idx = 0; idx < arrKeysShow.length; idx++) {
-                let urlMedia = `${srvAddress}${arrKeysShow[idx]['key']}?checkFiles=1&${additionalParam}`;
-                const mediaResponse = await fetchUrl(urlMedia, srvID)
-                let files = new fileItem();
-                let arrFiles = await files.add(mediaResponse, libPath)
-                resultArrShow = resultArrShow.concat(arrFiles);
-            }
-            hideSpinner();
-            return resultArrShow;
-            break;
-        case 'season':
-            const urlSeason = `${srvAddress}/library/metadata/${key}/children?checkFiles=1&${additionalParamShowSeason}`;
-            const responseSeason = await fetchUrl(urlSeason, srvID);
-            let resultArr = [];
-            let arrKeys = responseSeason['MediaContainer']['Metadata'];
-            for (let idx = 0; idx < arrKeys.length; idx++) {
-                let urlMedia = `${srvAddress}${arrKeys[idx]['key']}?checkFiles=1&${additionalParam}`;
-                const mediaResponse = await fetchUrl(urlMedia, srvID)
-                let files = new fileItem();
-                let arrFiles = await files.add(mediaResponse, libPath)
-                resultArr = resultArr.concat(arrFiles);
-            }
-             hideSpinner();
-            return resultArr;
-            break;
-        default:
-            let files = new fileItem();
-            let arrFiles = await files.add(jsonResponse, libPath)
-            hideSpinner();
-            return arrFiles;
-    }
+    let items = new fileItem();
+    const result = await items.add(jsonResponse, libPath, type, srvAddress)
+    hideSpinner();
+    return result;
 }
 
 async function fetchUrl(url, srvID) {  // Return a json response or null if we have an error
@@ -421,14 +392,26 @@ async function createFileSelect(files){
     let titlePic = document.createElement("i");
     titlePic.classList = "modal-icon glyphicon circle-info";
     title.appendChild(titlePic);
-    title.innerText = ` ${files[0]["title"]} (Type: ${files[0]["type"]})`;
+    title.innerText = `Select files to download`;
     fileSelectModalHeader.appendChild(title);
     fileSelectModalContent.appendChild(fileSelectModalHeader);
     // Modal body
     let fileSelectModalBody = document.createElement("div");
     fileSelectModalBody.classList = "modal-body modal-body-scroll dark-scrollbar";
-    fileSelectModalBody.innerHTML = `<p>Select items to dowwnload</p>`;
+    //fileSelectModalBody.innerHTML = `<p>Select items to dowwnload</p>`;
     let fileSelectModalBodyMedia = document.createElement("div");
+    // Add a select all checkbox
+    let item = document.createElement('div');
+    let itemCB = document.createElement("input");
+    itemCB.type = "checkbox";
+    itemCB.id = 'all';
+    itemCB.style.marginRight = "5px";
+    item.appendChild(itemCB);
+    let itemCBLbl = document.createElement("label");
+    itemCBLbl.setAttribute("for", 'all');
+    itemCBLbl.innerText = 'All';
+    item.appendChild(itemCBLbl);
+    fileSelectModalBodyMedia.appendChild(item);
     for (let idx = 0; idx < files.length; idx++){   // Add items to the modal
         let item = document.createElement('div');
         let itemCB = document.createElement("input");
@@ -473,6 +456,14 @@ async function createFileSelect(files){
     fileSelectModalFooterContents.appendChild(fileSelectModalFooterContentsBtnDwn);
     fileSelectModalFooter.appendChild(fileSelectModalFooterContents);
     fileSelectModalContent.appendChild(fileSelectModalFooter);
+    const all = document.getElementById('all');
+    all.addEventListener('change', () => {
+        const allInputs = document.getElementsByTagName("input");
+        for (var i = 0, max = allInputs.length; i < max; i++){
+            if (allInputs[i].type === 'checkbox')
+                allInputs[i].checked = all.checked;
+        }
+    })
 }
 
 // Initiate the download selection view, and send an array of selected items to the queue
@@ -576,8 +567,10 @@ async function checkForUpdate() {   // Check if a newer version is avail on gith
             // use the json
             gitVer = json['tag_name'];
         });
-    if (gitVer != `v${manifest.version}`) {
-        const alertMsg = `You are running version v${manifest.version} of "${manifest.name}", but version ${gitVer} is ready for download on ${gitRepo}`;
+    const gitNum = Number(gitVer.replace(/\D/g,''));    // Stripped everything besides numbers, and converted into a number
+    const maniNum = Number(manifest.version.replace(/\D/g,''));
+    if (gitNum > maniNum) {
+        const alertMsg = `You are running version v${manifest.version} of "${manifest.name}", \nbut version ${gitVer} is ready for download on: \n${gitRepo}`;
         alert(alertMsg);
     }
 }
