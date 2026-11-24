@@ -21,6 +21,9 @@ class fileItem {
         this.se = null; // SxxEyy and only for an episode
         this.resolution = null; // Only for a video
         this.summary = null;
+        this.albumTitle = null;
+        this.artist = null;
+        this.trackNo = null;
     }
 
     async add(response, libPath, type, srvAddress) {
@@ -33,9 +36,53 @@ class fileItem {
                 return await this.#addShow(response, libPath, srvAddress);
             case 'season':
                 return await this.#addSeason(response, libPath, srvAddress);
+            case 'album':
+                return await this.#addAlbum(response, libPath, srvAddress);
             default:
                 return [];
         }
+    }
+
+     async #addAlbum(response, libPath, srvAddress) {   // Add an artist
+        let result = [];
+        const srvID = getIDFromURL(document.URL);
+        for (let idxMetadata=0; idxMetadata < response.MediaContainer.Metadata.length; idxMetadata++) {
+            const key = response.MediaContainer.Metadata[idxMetadata].key;
+            const url = `${srvAddress}${key}?${additionalParam}`;
+            const tracks = await fetchUrl(url, srvID);
+
+            for (let idxTrack=0; idxTrack < tracks.MediaContainer.Metadata.length; idxTrack++) {    // Walk the tracks
+                const track = tracks.MediaContainer.Metadata[idxTrack];
+                let item = new fileItem();
+                item.title = track.title;
+                item.type = track.type;
+                item.summary = track.summary;
+                item.srvID = srvID;
+                item.albumTitle = track.parentTitle;
+                item.artist = track.grandparentTitle;
+                item.displayTitle = `${item.artist} - ${item.albumTitle} - ${item.title}`;
+                item.trackNo = track.index;
+                for (let idxMedia=0; idxMedia < track.Media.length; idxMedia++) {
+                    const media = track.Media[idxMedia];
+                    for (let idxPart=0; idxPart < media.Part.length; idxPart++) {
+                        const part = media.Part[idxPart];
+                        item.key = part.key;
+                        const arrKey = item.key.split('/');
+                        item.id = `${prefix}-${arrKey[3]}-${arrKey[4]}`;
+                        // File
+                        const fileName = part.file;
+                        for (let idx = 0; idx < libPath.length; idx++) {
+                            if (fileName.startsWith(libPath[idx]) && ((fileName[libPath[idx].length] == '/') || (fileName[libPath[idx].length] == '\\'))) {
+                                item.fileName = fileName.slice(libPath[idx].length + 1);
+                                break;
+                            }
+                        }
+                        result.push(item);
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     async #addSeason(response, libPath, srvAddress) { // Add a season
@@ -96,7 +143,6 @@ class fileItem {
         }
         // Now we need the seasons
         const url = `${srvAddress}/library/metadata/${key}/children?${additionalParam}`;
-        //const url = `${srvAddress}/library/metadata/${key}?${additionalParam}`;
         const srvID = getIDFromURL(document.URL);
         const showResponse = await fetchUrl(url, srvID);
         for (let idxMetadata=0; idxMetadata < showResponse.MediaContainer.Metadata.length; idxMetadata++) {
