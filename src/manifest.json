@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "XML4Plex",
-  "version": "0.0.16",
+  "version": "0.0.18",
   "description": "Show XML for a shared Plex Media Server",
   "content_scripts": [
     {

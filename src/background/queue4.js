@@ -10,6 +10,7 @@ import { decryptValue } from '../shared/crypto.js';
 
 let active, activeID = null;    // Sadly needed due to a race condition when downloading subs
 let creating; // A global promise to avoid concurrency issues
+const keepAlive = setInterval(chrome.runtime.getPlatformInfo, 25 * 1000);   // Never let backend sleep
 
 //#region Exported class
 
@@ -181,9 +182,7 @@ export class queue4 {
                         active = this.active;
                         await this.#saveQueue();  // Update storage with the download ID
                         // Prevent serviceworker to go into idle mode
-                        const keepAlive = setInterval(chrome.runtime.getPlatformInfo, 25 * 1000);
                         await this.#onDownloadComplete(this.active); // Wait for the download to finish
-                        clearInterval(keepAlive);   // Allow serviceworker to sleep again
                         const idx = this.queueOrder.indexOf(this.activeID);
                         this.queueOrder.splice(idx, 1); // Remove entry from the order array
                         delete this.queueData[this.activeID];    // Remove record from the metadata JSON

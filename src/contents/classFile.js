@@ -4,6 +4,9 @@
 
 "use strict";
 
+const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
+const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge,originalTitle&includeExtras=1';
+
 class fileItem {
     constructor() {
         this.type = null;
@@ -20,80 +23,273 @@ class fileItem {
         this.summary = null;
     }
 
-    async add(jsonResponse, libPath) {
-        const metadataLength = jsonResponse["MediaContainer"]["Metadata"].length;
-        let arrFiles = [];
-        for (let idxMetadata = 0; idxMetadata < metadataLength; idxMetadata++) {
-            const mediaLength = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"].length;
-            for (let idxMedia = 0; idxMedia < mediaLength; idxMedia++){
-                const partLength = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"].length;
-                for (let idxPart = 0; idxPart < partLength; idxPart++){
-                    const streamLength = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"].length;
-                    for (let idxStream = 0; idxStream < streamLength; idxStream++) {
-                        let file = new fileItem();
-                        file = file.#add(jsonResponse, idxMetadata, idxMedia, idxPart, idxStream, libPath);
-                        if (file) {
-                            arrFiles.push(file);
+    async add(response, libPath, type, srvAddress) {
+        switch (type) {
+            case 'movie':
+                return await this.#addMovie(response, libPath);
+            case 'episode':
+                return await this.#addEpisode(response, libPath);
+            case 'show':
+                return await this.#addShow(response, libPath, srvAddress);
+            case 'season':
+                return await this.#addSeason(response, libPath, srvAddress);
+            default:
+                return [];
+        }
+    }
+
+    async #addSeason(response, libPath, srvAddress) { // Add a season
+        let result = [];
+        const seasons = [];
+        const srvID = getIDFromURL(document.URL);
+        for (let idxSeason = 0; idxSeason < response.MediaContainer.Metadata.length; idxSeason++) { // Walk the metaData
+            const season = response.MediaContainer.Metadata[idxSeason];
+            const title = `${response.MediaContainer.Metadata[idxSeason].parentTitle} - ${response.MediaContainer.Metadata[idxSeason].title}`;
+            // Extras
+            if (season.hasOwnProperty('Extras')) {
+                if (season.Extras.hasOwnProperty('Metadata')) {
+                    if (season.Extras.Metadata.length > 0) {
+                    for (let idxExtras = 0; idxExtras < season.Extras.Metadata.length; idxExtras++) {
+                        const extraSeason = season.Extras.Metadata[idxExtras];
+                        if (extraSeason.guid.startsWith('file://')) { // We got a local extra
+                            const extra = await this.#addExtraItem(extraSeason, libPath, title);
+                            result.push(extra);
+                        }
+                    }
+                }
+                }
+            }
+            // Episodes
+            const urlEpisodes = `${srvAddress}${season.key}?${additionalParam}`;
+            const episodes = await fetchUrl(urlEpisodes, srvID);
+            const Metadata = episodes.MediaContainer.Metadata;
+            for (let idxMetadata = 0; idxMetadata < episodes.MediaContainer.Metadata.length; idxMetadata++) {
+                const episodeMetadata = episodes.MediaContainer.Metadata[idxMetadata];
+                const urlEpisode = `${srvAddress}${episodeMetadata.key}?checkFiles=1&${additionalParam}`;
+                const episodeSeason = await fetchUrl(urlEpisode, srvID);
+                const results = await this.#addEpisode(episodeSeason, libPath);
+                for (let idxResult = 0; idxResult < results.length; idxResult++) {
+                    result.push(results[idxResult]);
+                }
+            }
+        }
+        return result;
+    }
+
+    async #addShow(response, libPath, srvAddress) {  // Add a whole show
+        let result = [];
+        let key = null;
+        // Start to check if we have an extras for the show
+        for (let idxMetadata = 0; idxMetadata < response.MediaContainer.Metadata.length; idxMetadata++) {   // Walk the metadata
+            const metaData = response.MediaContainer.Metadata[idxMetadata];
+            key = metaData.key.split('/')[3];   // Key for the show
+            if (metaData.hasOwnProperty('Extras')) {
+                if (metaData.Extras.hasOwnProperty('Metadata')) {
+                    for (let idxExtra = 0; idxExtra < metaData.Extras.Metadata.length; idxExtra++) {    // Walk the extras
+                        const extra = metaData.Extras.Metadata[idxExtra];
+                        if (extra.guid.startsWith('file://')) { // We found a local extra
+                            result.push(await this.#addExtraItem(extra, libPath, metaData.title));
+                        }
+                    }
+                }
+            }
+        }
+        // Now we need the seasons
+        const url = `${srvAddress}/library/metadata/${key}/children?${additionalParam}`;
+        //const url = `${srvAddress}/library/metadata/${key}?${additionalParam}`;
+        const srvID = getIDFromURL(document.URL);
+        const showResponse = await fetchUrl(url, srvID);
+        for (let idxMetadata=0; idxMetadata < showResponse.MediaContainer.Metadata.length; idxMetadata++) {
+            const seasonURL = `${srvAddress}/library/metadata/${showResponse.MediaContainer.Metadata[idxMetadata].ratingKey}?${additionalParam}`;
+            const season = await fetchUrl(seasonURL, srvID);
+            const seasonItems = await this.#addSeason(season, libPath, srvAddress);
+            for (let idx=0; idx < seasonItems.length; idx++) {
+                result.push(seasonItems[idx]);
+            }
+        }
+        return result;
+    }
+
+    async #addEpisode(response, libPath) {
+        let result = [];
+        let fileName = null;    // placeholder for filename without extention
+        for (let idxMetadata= 0; idxMetadata < response.MediaContainer.Metadata.length; idxMetadata++) {
+            const metaData = response.MediaContainer.Metadata[idxMetadata];
+            if (metaData.hasOwnProperty('Extras')) {    // Potential extras
+                if (metaData.Extras.hasOwnProperty('Metadata')) {
+                    for (let idxExtras = 0; idxExtras < metaData.Extras.Metadata.length; idxExtras++) {
+                        result.push(await this.#addExtraItem(metaData.Extras.Metadata[idxExtras], libPath, metaData.title));
+                    }
+                }
+            }
+            const item = new fileItem();
+            item.showTitle = metaData.grandparentTitle;
+            item.srvID = await getIDFromURL(document.URL);
+            item.summary = metaData.summary;
+            item.title = metaData.title;
+            item.se = `S${(metaData.parentIndex).toString().padStart(2, "0")}E${(metaData.index).toString().padStart(2, "0")}`;
+            if (metaData.parentIndex === 0) {
+                item.type = 'special'
+            } else {
+                item.type = metaData.type;
+            }
+            for (let idxMedia = 0; idxMedia < metaData.Media.length; idxMedia++) {
+                const media = metaData.Media[idxMedia];
+                item.resolution = media.videoResolution;
+                for (let idxPart = 0; idxPart < media.Part.length; idxPart++) { // Walk the parts
+                    const part = media.Part[idxPart];
+                    if (!part.accessible) { // Not avail, so we must abort this part
+                        continue;
+                    }
+                    // File
+                    const videoFileName = part.file;
+                    for (let idx = 0; idx < libPath.length; idx++) {
+                        if (videoFileName.startsWith(libPath[idx]) && ((videoFileName[libPath[idx].length] == '/') || (videoFileName[libPath[idx].length] == '\\'))) {
+                            item.fileName = videoFileName.slice(libPath[idx].length + 1);
+                            const idxDot = item.fileName.lastIndexOf('.');
+                            fileName = item.fileName.substr(0, idxDot); // store video filename without the ext so we can reuse it for subs
+                            break;
+                        }
+                    }
+                    for (let idxStream = 0; idxStream < part.Stream.length; idxStream++) {  // Walk the streams
+                        const stream = part.Stream[idxStream];
+                        switch (stream.streamType) {
+                            case 1: // We have a video stream
+                                item.displayTitle = `${item.title} ${stream.extendedDisplayTitle}`;
+                                if (item.type === 'special') {
+                                    item.displayTitle = `${item.displayTitle} (Special)`;
+                                } else {
+                                    item.displayTitle = `${item.displayTitle} (Episode)`;
+                                }
+                                item.key = part.key;
+                                const arrKey = item.key.split('/');
+                                item.id = `${prefix}-${arrKey[3]}-${arrKey[4]}`;
+                                result.push(item);
+                                break;
+                            case 3: // We have a subtitle
+                                if (stream.hasOwnProperty('key')) { // It's an external subtitle
+                                    let itemSrt = JSON.parse(JSON.stringify(item));
+                                    itemSrt.key = stream.key;
+                                    itemSrt.type = 'subtitle';
+                                    const arrKey = itemSrt.key.split('/');
+                                    itemSrt.id = `${prefix}-${itemSrt.srvID}-${arrKey[3]}`;
+                                    itemSrt.displayTitle =  `${item.displayTitle} ${stream.extendedDisplayTitle}`;
+                                    itemSrt.languageTag = stream.languageTag;
+                                    itemSrt.fileName = `${fileName}.${itemSrt.languageTag}.${stream.format}`;
+                                    result.push(itemSrt);
+                                }
+                                break;
                         }
                     }
                 }
             }
         }
 
-        return arrFiles;
+
+        return result;
     }
 
-    #add(jsonResponse, idxMetadata, idxMedia, idxPart, idxStream, libPath){
-        const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
-        // Get the media type
-        const streamType = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["streamType"];
-        this.srvID = getIDFromURL(document.URL);
-        this.title = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["title"];
-        if ([1,3].includes(streamType)) {   // Only for subs and video
-            switch (streamType) {
-                case 1: // Video
-                    this.type = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["type"];
-                    this.resolution = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["videoResolution"];
-                    this.key = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["key"];
-                    this.title = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["title"];
-                    //fileName = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["file"];
-                    this.displayTitle = `${this.title} ${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["extendedDisplayTitle"]} (${this.type})`
-                    this.summary = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]['summary'];
-                    break;
-                case 3: // Subs
-                    this.type = 'subtitle';
-                    this.key = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["key"];
-                    if (!this.key) {    // Internal subtitle
-                        return null;
-                    }
-                    this.languageTag = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["languageTag"];
-                    this.displayTitle = `${this.title} ${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][0]["extendedDisplayTitle"]} ${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["extendedDisplayTitle"]}`;
-                    break;
-            }
-            const arrKey = this.key.split('/');
-            if (arrKey.includes('parts')) { //We have a video
-                this.id = `${prefix}${arrKey[3]}-${arrKey[4]}`;
-                // Filename
-                const videoFileName = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["file"];
-                for (let idx = 0; idx < libPath.length; idx++) {
-                    if (videoFileName.startsWith(libPath[idx]) && ((videoFileName[libPath[idx].length] == '/') || (videoFileName[libPath[idx].length] == '\\'))) {
-                        this.fileName = videoFileName.slice(libPath[idx].length + 1);
-                        mediaName = this.fileName.replace(/^.*[\\/]/, '');
-                        mediaDir = this.fileName.replace(this.fileName.replace(/^.*[\\/]/, ''), '');
-                        break;
+    async #addMovie(response, libPath) {
+        let arrItems = [];
+        arrItems = arrItems.concat(await this.#addExtraMovie(response, libPath));
+        arrItems = arrItems.concat(await this.#addMovieItems(response, libPath));
+        return arrItems;
+    }
+
+    async #addExtraMovie(response, libPath) { // Add extras for a movie
+        const result = [];
+        for (let idxMetadata = 0; idxMetadata < response['MediaContainer']['Metadata'].length; idxMetadata++) {
+            if (response['MediaContainer']['Metadata'][idxMetadata].hasOwnProperty('Extras')) { //We found some extras
+                for (let idxExtras = 0; idxExtras < response['MediaContainer']['Metadata'][idxMetadata]['Extras']['Metadata'].length; idxExtras++) {    // Walk the extras and find local candidates
+                    const extra = response['MediaContainer']['Metadata'][idxMetadata]['Extras']['Metadata'][idxExtras];
+                    if (extra['guid'].startsWith('file://')) {  //Local extra
+                        result.push(await this.#addExtraItem(extra, libPath, response['MediaContainer']['Metadata'][idxMetadata]['title']));
                     }
                 }
-            } else {    //We have a subtitle
-                this.id = `${prefix}${this.srvID}-${arrKey[3]}`
-                const lastDot = mediaName.lastIndexOf('.');
-                this.fileName = `${mediaDir}${mediaName.substring(0, lastDot)}.${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["languageTag"]}.${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["Media"][idxMedia]["Part"][idxPart]["Stream"][idxStream]["format"]}`;
             }
-            if (jsonResponse["MediaContainer"]["Metadata"][idxMetadata].hasOwnProperty("grandparentTitle")) {  //We have an episode
-                this.showTitle = jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["grandparentTitle"];
-                this.se = `S${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["parentIndex"].toString().padStart(2, "0")}E${jsonResponse["MediaContainer"]["Metadata"][idxMetadata]["index"].toString().padStart(2, "0")}`;
-            }
-            return this;
         }
-        return null;
+        return result;
+    }
+
+    async #addExtraItem(extra, libPath, title) { // Add the extra item
+        // ********** TODO Only if extras are present ********
+        const item = new fileItem();
+        item.title = extra.title;
+        item.type = 'extra';
+        item.key = extra.Media[0].Part[0].key;
+        item.displayTitle = `${title} - ${item.title} (Extra)`;
+        item.srvID = await getIDFromURL(document.URL);
+        item.resolution = extra.Media[0].videoResolution;
+        const arrKey = item.key.split('/');
+        item.id = `${prefix}${arrKey[3]}-${arrKey[4]}`;
+        //fileName
+        const videoFileName = extra.Media[0].Part[0].file;
+        for (let idx = 0; idx < libPath.length; idx++) {
+            if (videoFileName.startsWith(libPath[idx]) && ((videoFileName[libPath[idx].length] == '/') || (videoFileName[libPath[idx].length] == '\\'))) {
+                item.fileName = videoFileName.slice(libPath[idx].length + 1);
+                break;
+            }
+        }
+        return item;
+    }
+
+    async #addMovieItems(response, libPath) { // Add a movie
+        let result = [];
+        for (let idxMetadata = 0; idxMetadata < response.MediaContainer.Metadata.length; idxMetadata++) { // Walk the Metadata
+            const item = new fileItem();
+            const entry = response.MediaContainer.Metadata[idxMetadata];
+            item.title = entry.title;
+            item.type = entry.type;
+            item.srvID = await getIDFromURL(document.URL);
+            item.summary = entry.summary;
+            for (let idxMedia = 0; idxMedia < entry.Media.length; idxMedia++) {  // Walk the medias
+                const media = entry.Media[idxMedia];
+                item.resolution = media.videoResolution;
+                for (let idxParts = 0; idxParts < media.Part.length; idxParts++) {  // Walk the parts
+                    const part = media.Part[idxParts];
+                    if (!part.accessible) { // Item can not be reached
+                        continue;
+                    }
+                    item.key = part.key;
+                    const arrKey = item.key.split('/');
+                    item.id = `${prefix}${arrKey[3]}-${arrKey[4]}`;
+                    // File Name
+                    const videoFileName = part.file;
+                    for (let idx = 0; idx < libPath.length; idx++) {
+                        if (videoFileName.startsWith(libPath[idx]) && ((videoFileName[libPath[idx].length] == '/') || (videoFileName[libPath[idx].length] == '\\'))) {
+                            item.fileName = videoFileName.slice(libPath[idx].length + 1);
+                            break;
+                        }
+                    }
+                    for (let idxStream = 0; idxStream < part.Stream.length; idxStream++) {  // Walk the streams
+                        let stream = part.Stream[idxStream];
+                        switch (stream.streamType) {
+                            case 1: // Media
+                                const newItem = JSON.parse(JSON.stringify(item));
+                                newItem.displayTitle = `${item.title} ${stream.extendedDisplayTitle} (${item.type})`;
+                                item.displayTitle = newItem.displayTitle;
+                                if (newItem.key) { // We found a key for the item, so it's okay to add
+                                    result.push(newItem);
+                                }
+                                break;
+                            case 3: // Subtitle
+                                if (stream.hasOwnProperty('key')) { // We found an external subtitle
+                                    const newItem = JSON.parse(JSON.stringify(item));
+                                    newItem.type = stream.format;
+                                    newItem.displayTitle = `${item.displayTitle} ${stream.displayTitle} (External ${newItem.type})`;
+                                    newItem.key = stream.key;
+                                    const arrKey = newItem.key.split('/');
+                                    newItem.id = `${prefix}-${item.srvID}-${arrKey[3]}`;
+                                    // File
+                                    newItem.fileName = `${newItem.fileName.replace(/\.[^/.]+$/, "")}.${stream.languageTag}.${stream.format}`;
+                                    result.push(newItem);
+                                    break;
+                                }
+                        }
+                    }
+                }
+            }
+        }
+        return result;
     }
 }
