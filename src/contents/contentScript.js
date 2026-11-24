@@ -121,7 +121,6 @@ async function getIconsDiv(){   // Function to create and return a div containin
 }
 
 async function getdownImg() {   // Function to create and return the down arrow image element
-    console.log("Ged get img dwn")
     const img = document.createElement("img");
     img.src = await chrome.runtime.getURL("assets/down-arrow.png");
     img.alt = "Down Arrow";

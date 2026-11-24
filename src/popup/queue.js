@@ -172,6 +172,12 @@ async function showInfo(id){
             if (["movie", "episode"].includes(item["type"])){
                 txt += `<br><b>Summary:</b> ${item["summary"]}`;
             }
+            if (item.type === 'track') {
+              txt += `<br><b>Artist:</b> ${item["artist"]}`;
+              txt += `<br><b>Album:</b> ${item["albumTitle"]}`;
+              txt += `<br><b>Track:</b> ${item["trackNo"]}`;
+
+            }
             break;
     }
     info.innerHTML = txt;
