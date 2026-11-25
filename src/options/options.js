@@ -30,19 +30,21 @@ async function saveOptions() {
     const arrSelected = selected.map(obj => obj.value);
     const options = {};
     options.selectSubs = arrSelected;
-    let elRes = document.getElementById("resolution");
+    const elRes = document.getElementById("resolution");
     console.log("Selected resolution: " + elRes.value);
     options.selectRes = elRes.value;
-    let elResMax = document.getElementById("resolutionMax");
+    const elResMax = document.getElementById("resolutionMax");
     options.selectResMax = elResMax.value;
-    let elResMin = document.getElementById("resolutionMin");
+    const elResMin = document.getElementById("resolutionMin");
     options.selectResMin = elResMin.value;
+    const elLyrics = document.getElementById("lyrics");
+    options.lyrics = elLyrics.checked;
     await browser.storage.local.set({'options': options});
     alert("Options saved!");
 }
 
 async function loadOptions() {  // Load the options from storage and populate the multiselect
-    let options = (await browser.storage.local.get('options')).options;
+    const options = (await browser.storage.local.get('options')).options;
     // Subs
     const arrSelectedSubs = options.selectSubs || [];  // Get the selected subs from storage
     const data = [];
@@ -56,10 +58,12 @@ async function loadOptions() {  // Load the options from storage and populate th
     subs.data = data;
     subs.refresh();
     // Res
-    let elRes = document.getElementById("resolution");
+    const elRes = document.getElementById("resolution");
     elRes.value = options.selectRes;
-    let elResMax = document.getElementById("resolutionMax");
+    const elResMax = document.getElementById("resolutionMax");
     elResMax.value = options.selectResMax;
-    let elResMin = document.getElementById("resolutionMin");
+    const elResMin = document.getElementById("resolutionMin");
     elResMin.value = options.selectResMin;
+    const elLyrics = document.getElementById("lyrics");
+    elLyrics.checked = options.lyrics;
 }

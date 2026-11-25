@@ -43,14 +43,15 @@ class fileItem {
         }
     }
 
-     async #addAlbum(response, libPath, srvAddress) {   // Add an artist
+     async #addAlbum(response, libPath, srvAddress) {   // Add an album
+        const options = await chrome.runtime.sendMessage({ event: 'getOptions', prefs: null });
         let result = [];
+        let trackUrls = []; // Placeholder for real track urls
         const srvID = getIDFromURL(document.URL);
         for (let idxMetadata=0; idxMetadata < response.MediaContainer.Metadata.length; idxMetadata++) {
             const key = response.MediaContainer.Metadata[idxMetadata].key;
             const url = `${srvAddress}${key}?${additionalParam}`;
             const tracks = await fetchUrl(url, srvID);
-
             for (let idxTrack=0; idxTrack < tracks.MediaContainer.Metadata.length; idxTrack++) {    // Walk the tracks
                 const track = tracks.MediaContainer.Metadata[idxTrack];
                 let item = new fileItem();
@@ -60,7 +61,7 @@ class fileItem {
                 item.srvID = srvID;
                 item.albumTitle = track.parentTitle;
                 item.artist = track.grandparentTitle;
-                item.displayTitle = `${item.artist} - ${item.albumTitle} - ${item.title}`;
+                item.displayTitle = `${item.artist} - ${item.albumTitle} - ${item.title} (${item.type})`;
                 item.trackNo = track.index;
                 for (let idxMedia=0; idxMedia < track.Media.length; idxMedia++) {
                     const media = track.Media[idxMedia];
@@ -80,7 +81,51 @@ class fileItem {
                         result.push(item);
                     }
                 }
+                if (options.lyrics) {   // Lyrics selected, so we sadly needs to get the real track as well
+                    trackUrls.push( `${srvAddress}${track.key}?${additionalParam}`);
+                }
             }
+        }
+        if (trackUrls.length > 0) {
+            for (let idx=0; idx < trackUrls.length; idx++) { // Get the real track info
+                const track = await fetchUrl(trackUrls[idx], srvID);
+                for (let idxMetadata=0; idxMetadata < track.MediaContainer.Metadata.length; idxMetadata++) {
+                    const metadata = track.MediaContainer.Metadata[idxMetadata];
+                    for (let idxMedia=0; idxMedia < metadata.Media.length; idxMedia++) {
+                        const media = metadata.Media[idxMedia];
+                        for (let idxPart=0; idxPart < media.Part.length; idxPart++) {
+                            const part = media.Part[idxPart];
+                            for (let idxStream=0; idxStream < part.Stream.length; idxStream++) {
+                                const stream = part.Stream[idxStream];
+                                if (stream.streamType === 4 && stream.provider === 'com.plexapp.agents.localmedia') {  // We found local Lyrics
+                                    const item = new fileItem();
+                                    item.srvID = srvID;
+                                    item.albumTitle = metadata.parentTitle;
+                                    item.title = metadata.title;
+                                    item.artist = metadata.grandparentTitle;
+                                    item.key = stream.key;
+                                    item.type = 'lyrics';
+                                    item.displayTitle = `${item.artist} - ${item.albumTitle} - ${item.title} - ${stream.extendedDisplayTitle} (${item.type})`;
+                                    const arrKey = item.key.split('/');
+                                    item.id = `${prefix}-${srvID}-${arrKey[3]}`
+                                    let fileName = part.file;
+                                    for (let idx = 0; idx < libPath.length; idx++) {
+                                        if (fileName.startsWith(libPath[idx]) && ((fileName[libPath[idx].length] == '/') || (fileName[libPath[idx].length] == '\\'))) {
+                                            fileName = fileName.slice(libPath[idx].length + 1);
+                                            break;
+                                        }
+                                    }
+                                    const lastDot = fileName.lastIndexOf('.');
+                                    item.fileName = `${fileName.slice(0, lastDot)}.${stream.format}`;
+                                    result.push(item);
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+
         }
         return result;
     }
