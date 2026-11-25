@@ -15,8 +15,8 @@ let messageJSON = null; // Plaseholder for showJSON info
 //#region Event Listners and handlers
 
 // Requests allowed
-const validRequests = ['getPlexCookie', 'setGlobalVars', 'sharedServers', 'enqueue', 'deleteQueue', 'getQueue', 'deleteQueueItem', 'newOrder', 'toggleQueue', 'showJSON', 'jsonPageReady'];
-const returnVal = ['sharedServers', 'getPlexCookie', 'getQueue'];   //Requests where we want to return something from
+const validRequests = ['getPlexCookie', 'setGlobalVars', 'sharedServers', 'enqueue', 'deleteQueue', 'getQueue', 'deleteQueueItem', 'newOrder', 'toggleQueue', 'showJSON', 'jsonPageReady', 'getOptions'];
+const returnVal = ['sharedServers', 'getPlexCookie', 'getQueue', 'getOptions'];   //Requests where we want to return something from
 
 // Message listner
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -82,6 +82,8 @@ async function handleListener(request){
         case 'jsonPageReady':
             jsonPageReady();
             break;
+        case 'getOptions':
+            result = await getOptions();
         default:
             break;
     }
@@ -91,6 +93,10 @@ async function handleListener(request){
 
 
 //#region  Internal functions
+
+async function getOptions() {   // Return the options
+    return (await browser.storage.local.get('options')).options;
+}
 
 async function jsonPageReady() {  // send info to the showJSON tab
     await browser.tabs.sendMessage(
