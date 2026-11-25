@@ -47,11 +47,16 @@ class fileItem {
         const options = await chrome.runtime.sendMessage({ event: 'getOptions', prefs: null });
         let result = [];
         let trackUrls = []; // Placeholder for real track urls
+        let images = [];
+        let imagePath = null;
         const srvID = getIDFromURL(document.URL);
         for (let idxMetadata=0; idxMetadata < response.MediaContainer.Metadata.length; idxMetadata++) {
             const key = response.MediaContainer.Metadata[idxMetadata].key;
             const url = `${srvAddress}${key}?${additionalParam}`;
             const tracks = await fetchUrl(url, srvID);
+            if (response.MediaContainer.Metadata[idxMetadata].hasOwnProperty('Image')) {
+                images.push(response.MediaContainer.Metadata[idxMetadata].Image)
+            }
             for (let idxTrack=0; idxTrack < tracks.MediaContainer.Metadata.length; idxTrack++) {    // Walk the tracks
                 const track = tracks.MediaContainer.Metadata[idxTrack];
                 let item = new fileItem();
@@ -79,6 +84,7 @@ class fileItem {
                             }
                         }
                         result.push(item);
+                        imagePath = item.fileName.slice(0, item.fileName.lastIndexOf('\\'));
                     }
                 }
                 if (options.lyrics) {   // Lyrics selected, so we sadly needs to get the real track as well
@@ -126,6 +132,26 @@ class fileItem {
 
             }
 
+        }
+        if (images.length > 0) { // We got Images to add as well
+            for (let idx=0; idx < images[0].length; idx++) {
+                const image = images[0][idx];
+                let item = new fileItem();
+                item.srvID = srvID;
+                item.key = image.url;
+                const arrKeys = item.key.split('/');
+                item.id = `${prefix}${arrKeys[3]}-${arrKeys[5]}`;
+                item.type = 'poster'
+                if (image.type === 'coverPoster') {
+                    item.title = 'cover';
+                } else {
+                    item.title = image.type;
+                }
+                item.displayTitle = `${image.alt} - ${item.title} (${item.type})`;
+                // Filename
+                item.fileName = `${imagePath}\\${item.title}.jpg`
+                result.push(item);
+            }
         }
         return result;
     }

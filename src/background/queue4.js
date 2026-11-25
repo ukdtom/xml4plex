@@ -168,7 +168,8 @@ export class queue4 {
                     prefs['saveAs'] = false;
                     this.currentlyDownloading = rec['displayTitle'];
                     await this.#saveQueue();
-                    if (rec['type'] === 'subtitle' || rec['type'] === 'lyrics') {   // A sub is downloaded so fast we can't even detect it, so simply nuke from the queue
+                    if (rec['type'] === 'subtitle' || rec['type'] === 'lyrics') {   // A non media is downloaded so fast we can't even detect it, so simply nuke from the queue
+                        console.log("Ged Rec", rec)
                         const idx = this.queueOrder.indexOf(rec['id']);
                         this.queueOrder.splice(idx, 1); // Remove entry from the order array
                         delete this.queueData[rec['id']];    // Remove record from the metadata JSON
