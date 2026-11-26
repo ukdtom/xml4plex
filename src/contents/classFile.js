@@ -5,7 +5,9 @@
 "use strict";
 
 const prefix = 'ss_elem_';  // Id prefix, that matches the listbox
-const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentThumb,art,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge,originalTitle&includeExtras=1';
+const additionalParam = 'excludeElements=Producer,Role,Writer,Rating,Director,Image,Guid,UltraBlurColors,Genre,Country,CommonSenseMedia&excludeFields=viewCount,identifier,mediaTagPrefix,librarySectionUUID,grandparentSlug,mediaTagVersion,librarySectionKey,librarySectionTitle,parentRatingKey,grandparentRatingKey,parentGuid,grandparentGuid,grandparentKey,parentKey,titleSort,contentRating,audienceRating,thumb,parentThumb,grandparentArt,lastViewedAt,grandparentTheme,year,duration,originallyAvailableAt,addedAt,updatedAt,audienceRatingImage,hasVoiceActivity,videoProfile,videoFrameRate,container,videoCodec,audioCodec,audioChannels,aspectRatio,height,width,bitrate,id,size,codec,default,bitDepth,chromaLocation,chromaSubsampling,codedHeight,codedWidth,colorPrimaries,colorRange,colorSpace,colorTrc,frameRate,level,profile,refFrames,canNormalizeLoudness,channels,audioChannelLayout,samplingRate,canAutoSync,slug,studio,primaryExtraKey,contentRatingAge,originalTitle&includeExtras=1';
+const normalizePath = path => path.replace(/[\\/]+/g, '/'); // Normalize a filename with path
+const filePath = file => file.slice(0, file.lastIndexOf('/'));
 
 class fileItem {
     constructor() {
@@ -38,23 +40,47 @@ class fileItem {
                 return await this.#addSeason(response, libPath, srvAddress);
             case 'album':
                 return await this.#addAlbum(response, libPath, srvAddress);
+            case 'artist':
+                return await this.#addArtist(response, libPath, srvAddress);
             default:
                 return [];
         }
     }
 
-     async #addAlbum(response, libPath, srvAddress) {   // Add an album
+    async #addArtist(response, libPath, srvAddress) {   // Add an artist and all their albums
+        let result = [];
+        let images = [];
+        let imagePath = null;
+        // *********** TODO ****************
+        return result;
+    }
+
+    async #addAlbum(response, libPath, srvAddress) {   // Add an album
         const options = await chrome.runtime.sendMessage({ event: 'getOptions', prefs: null });
         const lyrics = options? options.lyrics : false;
         let result = [];
         let trackUrls = []; // Placeholder for real track urls
         let images = [];
+        let imagesArtist = [];
+        let imagePathArtist = null;
+        let artistDone = false;
         let imagePath = null;
+        let jsonArtist = {};
         const srvID = getIDFromURL(document.URL);
         for (let idxMetadata=0; idxMetadata < response.MediaContainer.Metadata.length; idxMetadata++) {
             const key = response.MediaContainer.Metadata[idxMetadata].key;
             const url = `${srvAddress}${key}?${additionalParam}`;
             const tracks = await fetchUrl(url, srvID);
+            if (!artistDone) {  // Need to get artist posters
+                let poster = {};
+                poster.alt = tracks.MediaContainer.grandparentTitle;
+                poster.type = 'coverPoster';
+                poster.url = tracks.MediaContainer.grandparentThumb;
+                imagesArtist.push(JSON.parse(JSON.stringify(poster)));  // Add cover thumb
+                poster.type = 'background';
+                poster.url = tracks.MediaContainer.art;
+                imagesArtist.push(JSON.parse(JSON.stringify(poster)));  // Add background thumb
+            }
             if (response.MediaContainer.Metadata[idxMetadata].hasOwnProperty('Image')) {
                 images.push(response.MediaContainer.Metadata[idxMetadata].Image)
             }
@@ -80,12 +106,19 @@ class fileItem {
                         const fileName = part.file;
                         for (let idx = 0; idx < libPath.length; idx++) {
                             if (fileName.startsWith(libPath[idx]) && ((fileName[libPath[idx].length] == '/') || (fileName[libPath[idx].length] == '\\'))) {
-                                item.fileName = fileName.slice(libPath[idx].length + 1);
+                                item.fileName = normalizePath(fileName.slice(libPath[idx].length + 1));
                                 break;
                             }
                         }
                         result.push(item);
-                        imagePath = item.fileName.slice(0, item.fileName.lastIndexOf('\\'));
+                        if (!imagePath) { // Set path to images
+                            const normFile = normalizePath(item.fileName);
+                            imagePath = filePath(normFile);
+                            if (!artistDone) {  // Add path for artist posters
+                                imagePathArtist = imagePath.slice(0, imagePath.lastIndexOf('/'));
+                                artistDone = true;
+                            }
+                        }
                     }
                 }
                 if (lyrics) {   // Lyrics selected, so we sadly needs to get the real track as well
@@ -123,7 +156,7 @@ class fileItem {
                                         }
                                     }
                                     const lastDot = fileName.lastIndexOf('.');
-                                    item.fileName = `${fileName.slice(0, lastDot)}.${stream.format}`;
+                                    item.fileName = normalizePath(`${fileName.slice(0, lastDot)}.${stream.format}`);
                                     result.push(item);
                                 }
                             }
@@ -134,9 +167,18 @@ class fileItem {
             }
 
         }
-        if (images.length > 0) { // We got Images to add as well
-            for (let idx=0; idx < images[0].length; idx++) {
-                const image = images[0][idx];
+        result.push.apply(result, await this.#addPosters(images, imagePath, srvID));    // Add posters if we have any
+        result.push.apply(result, await this.#addPosters(imagesArtist, imagePathArtist, srvID, true));    // Add artist posters if we have any
+
+        return result;
+    }
+
+    async #addPosters(images, imagePath, srvID, artist = false){ // Add posters
+        let result = [];
+        const length = artist? images.length : images[0].length;
+        if (length > 0) { // We got Images to add as well
+            for (let idx=0; idx < length; idx++) {
+                const image = artist? images[idx] : images[0][idx];
                 let item = new fileItem();
                 item.srvID = srvID;
                 item.key = image.url;
@@ -147,10 +189,15 @@ class fileItem {
                 } else {
                     item.title = image.type;
                 }
-                item.id = `${prefix}${arrKeys[3]}-${arrKeys[5]}-${item.title}`;
-                item.displayTitle = `${image.alt} - ${item.title} (${item.type})`;
+                if (artist){
+                    item.id = `${prefix}${arrKeys[3]}-${arrKeys[5]}-${item.title}-artist`;
+                    item.displayTitle = `${image.alt} - ${item.title} (${item.type}) (artist)`;
+                } else {
+                    item.id = `${prefix}${arrKeys[3]}-${arrKeys[5]}-${item.title}`;
+                    item.displayTitle = `${image.alt} - ${item.title} (${item.type})`;
+                }
                 // Filename
-                item.fileName = `${imagePath}\\${item.title}.jpg`
+                item.fileName = normalizePath(`${imagePath}/${item.title}.jpg`);
                 result.push(item);
             }
         }
@@ -265,7 +312,7 @@ class fileItem {
                         if (videoFileName.startsWith(libPath[idx]) && ((videoFileName[libPath[idx].length] == '/') || (videoFileName[libPath[idx].length] == '\\'))) {
                             item.fileName = videoFileName.slice(libPath[idx].length + 1);
                             const idxDot = item.fileName.lastIndexOf('.');
-                            fileName = item.fileName.substr(0, idxDot); // store video filename without the ext so we can reuse it for subs
+                            fileName = normalizePath(item.fileName.substr(0, idxDot)); // store video filename without the ext so we can reuse it for subs
                             break;
                         }
                     }
@@ -344,7 +391,7 @@ class fileItem {
         const videoFileName = extra.Media[0].Part[0].file;
         for (let idx = 0; idx < libPath.length; idx++) {
             if (videoFileName.startsWith(libPath[idx]) && ((videoFileName[libPath[idx].length] == '/') || (videoFileName[libPath[idx].length] == '\\'))) {
-                item.fileName = videoFileName.slice(libPath[idx].length + 1);
+                item.fileName = normalizePath(videoFileName.slice(libPath[idx].length + 1));
                 break;
             }
         }
@@ -375,7 +422,7 @@ class fileItem {
                     const videoFileName = part.file;
                     for (let idx = 0; idx < libPath.length; idx++) {
                         if (videoFileName.startsWith(libPath[idx]) && ((videoFileName[libPath[idx].length] == '/') || (videoFileName[libPath[idx].length] == '\\'))) {
-                            item.fileName = videoFileName.slice(libPath[idx].length + 1);
+                            item.fileName = normalizePath(videoFileName.slice(libPath[idx].length + 1));
                             break;
                         }
                     }
@@ -399,7 +446,7 @@ class fileItem {
                                     const arrKey = newItem.key.split('/');
                                     newItem.id = `${prefix}-${item.srvID}-${arrKey[3]}`;
                                     // File
-                                    newItem.fileName = `${newItem.fileName.replace(/\.[^/.]+$/, "")}.${stream.languageTag}.${stream.format}`;
+                                    newItem.fileName = normalizePath(`${newItem.fileName.replace(/\.[^/.]+$/, "")}.${stream.languageTag}.${stream.format}`);
                                     result.push(newItem);
                                     break;
                                 }
