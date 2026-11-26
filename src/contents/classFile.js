@@ -45,12 +45,7 @@ class fileItem {
 
      async #addAlbum(response, libPath, srvAddress) {   // Add an album
         const options = await chrome.runtime.sendMessage({ event: 'getOptions', prefs: null });
-        let lyrics;
-        if (options.hasOwnProperty('lyric')) {
-            lyrics = options.lyrics;
-        } else {
-            lyrics = false;
-        }
+        const lyrics = options? options.lyrics : false;
         let result = [];
         let trackUrls = []; // Placeholder for real track urls
         let images = [];

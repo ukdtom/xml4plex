@@ -95,10 +95,11 @@ async function handleListener(request){
 //#region  Internal functions
 
 async function getOptions() {   // Return the options
-    if (await browser.storage.local.getKeys.hasOwnProperty('options')) {
+    const keys = await browser.storage.local.getKeys();
+    if (keys.includes('options')) {
         return (await browser.storage.local.get('options')).options;
     } else {
-        return {};
+        return null;
     }
 }
 
