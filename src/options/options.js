@@ -44,7 +44,12 @@ async function saveOptions() {
 }
 
 async function loadOptions() {  // Load the options from storage and populate the multiselect
-    const options = (await browser.storage.local.get('options')).options;
+    let options;
+    if (await browser.storage.local.getKeys().hasOwnProperty('options')) {
+        options = (await browser.storage.local.get('options')).options;
+    } else {
+        options = {};
+    }
     // Subs
     const arrSelectedSubs = options.selectSubs || [];  // Get the selected subs from storage
     const data = [];
