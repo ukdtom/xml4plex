@@ -95,7 +95,11 @@ async function handleListener(request){
 //#region  Internal functions
 
 async function getOptions() {   // Return the options
-    return (await browser.storage.local.get('options')).options;
+    if (await browser.storage.local.getKeys.hasOwnProperty('options')) {
+        return (await browser.storage.local.get('options')).options;
+    } else {
+        return {};
+    }
 }
 
 async function jsonPageReady() {  // send info to the showJSON tab
