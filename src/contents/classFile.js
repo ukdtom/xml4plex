@@ -45,6 +45,7 @@ class fileItem {
 
      async #addAlbum(response, libPath, srvAddress) {   // Add an album
         const options = await chrome.runtime.sendMessage({ event: 'getOptions', prefs: null });
+        const lyrics = options.lyric | false;
         let result = [];
         let trackUrls = []; // Placeholder for real track urls
         let images = [];
@@ -87,7 +88,7 @@ class fileItem {
                         imagePath = item.fileName.slice(0, item.fileName.lastIndexOf('\\'));
                     }
                 }
-                if (options.lyrics) {   // Lyrics selected, so we sadly needs to get the real track as well
+                if (lyrics) {   // Lyrics selected, so we sadly needs to get the real track as well
                     trackUrls.push( `${srvAddress}${track.key}?${additionalParam}`);
                 }
             }
@@ -140,13 +141,13 @@ class fileItem {
                 item.srvID = srvID;
                 item.key = image.url;
                 const arrKeys = item.key.split('/');
-                item.id = `${prefix}${arrKeys[3]}-${arrKeys[5]}`;
                 item.type = 'poster'
                 if (image.type === 'coverPoster') {
                     item.title = 'cover';
                 } else {
                     item.title = image.type;
                 }
+                item.id = `${prefix}${arrKeys[3]}-${arrKeys[5]}-${item.title}`;
                 item.displayTitle = `${image.alt} - ${item.title} (${item.type})`;
                 // Filename
                 item.fileName = `${imagePath}\\${item.title}.jpg`
