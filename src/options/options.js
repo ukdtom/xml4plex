@@ -43,9 +43,10 @@ async function saveOptions() {
     alert("Options saved!");
 }
 
-async function loadOptions() {  // Load the options from storage and populate the multiselect
+async function loadOptions() {  // Load the options from storage and populate the page
     let options;
-    if (await browser.storage.local.getKeys().hasOwnProperty('options')) {
+    const keys = await browser.storage.local.getKeys();
+    if (keys.includes('options')) {
         options = (await browser.storage.local.get('options')).options;
     } else {
         options = {};
